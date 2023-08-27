@@ -5,25 +5,39 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>EVRepairs - Reparación de Teléfonos</title>
-  <link rel="stylesheet" href="styles.css"> <!-- Enlaza tu archivo CSS personalizado aquí -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css"
+ 
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha384-iYQeCzEYFbKjA/T2uDLTpkwGzCiq6soy8tYaI1GyVh/UjpbCx/TYkiZhlZB6+fzT" crossorigin="anonymous">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
+    
+  <style>
+    /* Personaliza el estilo del menú desplegable */
+    .navbar-nav {
+      text-align: center; /* Centra el texto en dispositivos móviles */
+    }
+    .navbar-collapse {
+      margin-top: 1rem; /* Espacio entre el logo y el menú en dispositivos móviles */
+    }
+    .navbar-toggler {
+      margin-top: 0.5rem; /* Ajusta el espacio sobre el ícono de la hamburguesa */
+    }
+  </style>
 </head>
 
 <body>
-  <header class="header"><!-- Coloca la barra de navegación aquí -->
+  <header><!-- Coloca la barra de navegación aquí -->
   </header>
-  
+
   <nav class="navbar navbar-expand-lg navbar-light bg-light">
-    <div class="container">
-      <a class="navbar-brand" href="#">EVRepairs</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+    <div class="container"> <!-- Agrega un contenedor para centrar el contenido -->
+      <a class="navbar-brand d-flex justify-content-center" href="#">EVRepairs</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
         aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
         <span class="navbar-toggler-icon"></span>
       </button>
-      <div class="collapse navbar-collapse" id="navbarNav">
-        <ul class="navbar-nav ml-auto">
+      <div class="collapse navbar-collapse justify-content-center" id="navbarNav">
+        <ul class="navbar-nav">
           <li class="nav-item active">
             <a class="nav-link" href="index.html">Inicio</a>
           </li>
@@ -41,7 +55,8 @@
       </div>
     </div>
   </nav>
-
+  
+  
   <section class="container mt-5">
     <div class="row">
       <div class="col-lg-6">
@@ -98,7 +113,14 @@
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>  
-  <!-- Agrega aquí tus propios scripts si es necesario -->
+    <!-- Bootstrap JavaScript Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"
+      integrity="sha384-oBqDVmMz9ATKxIep9tiCxS/Z9fNfEXiDAYTujMAeBAsjFuCZSmKbSSUnQlmh/jp3" crossorigin="anonymous">
+    </script>
+  
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.min.js"
+      integrity="sha384-7VPbUDkoPSGFnVtYi0QogXtr74QeVeeIs99Qfg5YCF+TidwNdjvaKZX19NZ/e6oz" crossorigin="anonymous">
+    </script>
 </body>
 
 </html>
