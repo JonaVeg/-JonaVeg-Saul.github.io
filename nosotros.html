@@ -56,18 +56,22 @@
     }
 
     footer {
-      background-color: #333;
-      color: #fff;
-    }
+  background-color: rgba(51, 51, 51, 0.9); /* Usando opacidad para suavizar el color */
+  color: black;
+}
+footer a {
+  color: #a0a0a0; /* Un tono más claro para los enlaces */
+  text-decoration: none;
+  transition: color 0.2s; /* Agregar una transición suave al cambiar de color */
+}
 
-    footer a {
-      color: #fff;
-      text-decoration: none;
-    }
+footer a:hover {
+  color: #007bff;
+}
+.footer-content ul li {
+  margin-bottom: 10px; /* Añadir espacio entre los elementos de la lista */
+}
 
-    footer a:hover {
-      color: #007bff;
-    }
 
     .bi {
       font-size: 1.2rem;
@@ -174,8 +178,8 @@
 <br>
 <br>
 <br>
-<footer class="bg-dark text-light py-2">
-    <div class="container">
+
+<footer class="bg-dark text-light">
       <div class="row">
         <div class="col-md-6">
           <h4>Contacto</h4>
@@ -195,7 +199,6 @@
           </ul>
         </div>
       </div>
-    </div>
 </footer>
 
 
