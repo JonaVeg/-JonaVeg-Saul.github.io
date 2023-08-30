@@ -7,5 +7,9 @@
   },
   "devDependencies": {
     "serve": "^13.0.2"
+  },
+  "dependencies": {
+    "@splinetool/react-spline": "^2.2.6",
+    "@splinetool/runtime": "^0.9.432"
   }
 }
