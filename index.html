@@ -10,6 +10,10 @@
     integrity="sha384-iYQeCzEYFbKjA/T2uDLTpkwGzCiq6soy8tYaI1GyVh/UjpbCx/TYkiZhlZB6+fzT" crossorigin="anonymous">
 
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&family=Lobster&display=swap" rel="stylesheet">
+
     
   <style>
     /* Personaliza el estilo del menú desplegable */
@@ -30,18 +34,28 @@
       height: 100%;
       object-fit: cover;
       z-index: -1;
-
-
-      
     }
+    body {
+      font-family: 'Roboto', sans-serif;
+    }
+    
+    h1, h2, h3 {
+      font-family: 'Lobster', cursive;
+    }
+    .navbar {
+      font-family: 'Roboto', sans-serif; /* Cambia 'Roboto' por la fuente que deseas utilizar barra de navegaciom*/ 
+    }
+        
   </style>
 </head>
 
-<body>
+<body style="background-color: #EBEDEF;"><!-- cambiar color boby -->
+
   <header><!-- Coloca la barra de navegación aquí -->
   </header>
 
-  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+  
+  <nav class="navbar navbar-expand-lg navbar-light" style="background-color: #B5FF33;"><!-- cambia color barra de navegacion  -->
     <div class="container"> <!-- Agrega un contenedor para centrar el contenido -->
       <a class="navbar-brand d-flex justify-content-center" href="#">EVRepairs</a>
       <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav"
@@ -73,7 +87,7 @@
       <div class="col-lg-6">
         <h1 class="display-4">¡Bienvenidos a EVRepairs, su centro de confianza para la reparación de teléfonos celulares!</h1>
         <p class="lead">Somos expertos en reparación de teléfonos celulares de todas las marcas y modelos. Ofrecemos soluciones rápidas y confiables para tus dispositivos dañados.</p>
-        <a href="servicios.html" class="btn btn-primary btn-lg">Ver Nuestros Servicios</a>
+        <a href="servicios.html" class="btn btn-success btn-lg">Ver Nuestros Servicios</a>
       </div>
       <div class="col-lg-6">
         <img src="tel.jpg" alt="Teléfono Celular" class="img-fluid rounded-circle">
