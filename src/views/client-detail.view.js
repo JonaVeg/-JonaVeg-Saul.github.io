@@ -2,97 +2,146 @@
 import { db, fx } from '../firebase.js';
 
 export function renderClientDetail(clientId) {
+  console.log('[CLIENT DETAIL] open', clientId);
   const app = document.getElementById('app');
-  const section = document.createElement('section');
-  section.innerHTML = `
-    <a href="#/clients">← Volver</a>
+  const el = document.createElement('section');
+  el.innerHTML = `
+    <a href="#/clients">← Volver a clientes</a>
     <h2>Cliente</h2>
-    <div id="clientBox" class="card">Cargando...</div>
+    <div id="boxClient" class="card">Cargando...</div>
 
     <h3>Equipos</h3>
-    <form id="formEq" class="card">
-      <input name="serialNumber" placeholder="Núm. de Serie" required />
-      <input name="brand" placeholder="Marca" />
-      <input name="model" placeholder="Modelo" />
-      <button>Agregar equipo</button>
-    </form>
-    <div id="eqList"></div>
+    <details class="card">
+      <summary>➕ Agregar equipo</summary>
+      <form id="formEq" class="grid">
+        <input name="serial" placeholder="Núm. de serie" required />
+        <input name="brand"  placeholder="Marca" />
+        <input name="model"  placeholder="Modelo" />
+        <button>Guardar equipo</button>
+      </form>
+      <div id="eqMsg" class="muted"></div>
+    </details>
+    <table class="clients-table">
+      <thead><tr><th>Serie</th><th>Marca/Modelo</th><th>Acciones</th></tr></thead>
+      <tbody id="eqBody"><tr><td colspan="3" style="text-align:center;">Cargando...</td></tr></tbody>
+    </table>
 
     <h3>Órdenes (OST)</h3>
-    <div id="ordList"></div>
+    <button id="btnNewOrder" class="cta">➕ Nueva OST</button>
+    <table class="clients-table" style="margin-top:.5rem;">
+      <thead><tr><th>Folio</th><th>Estatus</th><th>Equipo</th><th>Fecha</th><th></th></tr></thead>
+      <tbody id="ordBody"><tr><td colspan="5" style="text-align:center;">Cargando...</td></tr></tbody>
+    </table>
   `;
-  app.replaceChildren(section);
+  app.replaceChildren(el);
 
-  const clientBox = section.querySelector('#clientBox');
-  const eqForm = section.querySelector('#formEq');
-  const eqList = section.querySelector('#eqList');
-  const ordList = section.querySelector('#ordList');
+  const boxClient = el.querySelector('#boxClient');
+  const eqBody = el.querySelector('#eqBody');
+  const ordBody = el.querySelector('#ordBody');
+  const formEq = el.querySelector('#formEq');
+  const eqMsg = el.querySelector('#eqMsg');
+  const btnNewOrder = el.querySelector('#btnNewOrder');
 
+  // Cargar datos del cliente
   (async () => {
-    const cRef = fx.doc(db, 'clients', clientId);
-    const cDoc = await fx.getDoc(cRef);
-    const c = cDoc.data();
-    clientBox.innerHTML = `<strong>${c.name}</strong><br>
-      ${c.contact?.email ?? ''} • ${c.contact?.phone ?? ''}`;
+    const cSnap = await fx.getDoc(fx.doc(db, 'clients', clientId));
+    const c = cSnap.data();
+    boxClient.innerHTML = `
+      <strong>${c?.name ?? '(Sin nombre)'}</strong><br/>
+      ${c?.email ?? '-'} • ${c?.phone ?? '-'}<br/>
+      <small>${c?.address ?? ''}</small>
+    `;
 
-    // Equipos del cliente
+    // Equipos
     async function loadEquipments() {
-      eqList.innerHTML = 'Cargando equipos...';
+      eqBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">Cargando...</td></tr>`;
       const q = fx.query(fx.collection(db, 'equipments'), fx.where('clientId', '==', clientId));
       const snap = await fx.getDocs(q);
-      eqList.innerHTML = '';
+      const rows = [];
       snap.forEach(d => {
         const e = d.data();
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.innerHTML = `
-          <div>
-            <strong>${e.serialNumber}</strong> — ${e.brand ?? ''} ${e.model ?? ''}
-          </div>
-          <div>
-            <a href="#/orders" onclick="renderOrderDetail(null,'${clientId}','${d.id}')">Nueva OST</a>
-          </div>
-        `;
-        eqList.appendChild(row);
+        rows.push(`
+          <tr>
+            <td>${e.serial}</td>
+            <td>${e.brand ?? ''} ${e.model ?? ''}</td>
+            <td><button data-new-ost="${d.id}" class="cta">Nueva OST</button></td>
+          </tr>
+        `);
+      });
+      eqBody.innerHTML = rows.length ? rows.join('') :
+        `<tr><td colspan="3" style="text-align:center;color:#888;">Sin equipos</td></tr>`;
+
+      // Botones "Nueva OST" desde cada equipo
+      eqBody.querySelectorAll('[data-new-ost]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const equipmentId = btn.getAttribute('data-new-ost');
+          window.renderOrderDetail(null, clientId, equipmentId);
+        });
       });
     }
 
     // Órdenes del cliente
     async function loadOrders() {
-      ordList.innerHTML = 'Cargando órdenes...';
-      const q = fx.query(fx.collection(db, 'service_orders'), fx.where('clientId', '==', clientId), fx.orderBy('createdAt', 'desc'));
+      ordBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Cargando...</td></tr>`;
+      const q = fx.query(
+        fx.collection(db, 'orders'),
+        fx.where('clientId', '==', clientId),
+        fx.orderBy('createdAt', 'desc')
+      );
       const snap = await fx.getDocs(q);
-      ordList.innerHTML = '';
+      const rows = [];
       snap.forEach(d => {
         const o = d.data();
-        const row = document.createElement('div');
-        row.className = 'row';
-        row.innerHTML = `
-          <div>
-            <strong>Folio:</strong> ${o.folio} • <em>${o.status}</em><br>
-            <small>Equipo: ${o.equipmentId}</small>
-          </div>
-          <div><a href="#/orders" onclick="renderOrderDetail('${d.id}')">Abrir</a></div>
-        `;
-        ordList.appendChild(row);
+        const dateStr = o.date?.toDate?.().toLocaleDateString?.() ?? '-';
+        rows.push(`
+          <tr>
+            <td>${o.folio}</td>
+            <td>${o.status}</td>
+            <td>${o.equipmentId}</td>
+            <td>${dateStr}</td>
+            <td><button data-open="${d.id}">Abrir</button></td>
+          </tr>
+        `);
+      });
+      ordBody.innerHTML = rows.length ? rows.join('') :
+        `<tr><td colspan="5" style="text-align:center;color:#888;">Sin órdenes</td></tr>`;
+
+      // Abrir orden
+      ordBody.querySelectorAll('[data-open]').forEach(b => {
+        b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
       });
     }
 
-    eqForm.onsubmit = async (e) => {
+    // Guardar equipo nuevo
+    formEq.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const fd = new FormData(eqForm);
-      await fx.addDoc(fx.collection(db, 'equipments'), {
+      const fd = new FormData(formEq);
+      const payload = {
         clientId,
-        serialNumber: fd.get('serialNumber'),
-        brand: fd.get('brand'),
-        model: fd.get('model'),
+        serial: fd.get('serial')?.toString().trim(),
+        brand: fd.get('brand')?.toString().trim() || '',
+        model: fd.get('model')?.toString().trim() || '',
         createdAt: fx.serverTimestamp()
-      });
-      eqForm.reset();
-      loadEquipments();
-    };
+      };
+      if (!payload.serial) return;
+      eqMsg.textContent = 'Guardando...';
+      try {
+        await fx.addDoc(fx.collection(db, 'equipments'), payload);
+        eqMsg.textContent = '✔ Equipo agregado';
+        formEq.reset();
+        await loadEquipments();
+      } catch (err) {
+        console.error('[EQUIPMENTS] create error', err);
+        eqMsg.textContent = '✖ Error al guardar';
+      }
+    });
 
-    loadEquipments();
-    loadOrders();
+    // Botón Nueva OST general (sin elegir equipo todavía)
+    btnNewOrder.addEventListener('click', () => {
+      window.renderOrderDetail(null, clientId, null);
+    });
+
+    // Inicializar listas
+    await Promise.all([loadEquipments(), loadOrders()]);
   })();
 }

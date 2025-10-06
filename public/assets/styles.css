@@ -91,3 +91,46 @@ button[type="button"] { background:#444; }
 .cta { padding:.8rem 1rem; border:none; border-radius:12px; background:#0d6efd; color:#fff; cursor:pointer; }
 .msg { margin-top:.25rem; font-size:.9rem; color:#3a7; }
 .msg.error { color:#d33; }
+
+
+
+/*Clientes*/
+.clients-section {
+  padding: 1.5rem;
+}
+
+.clients-section h1 {
+  margin-bottom: 0.25rem;
+}
+
+.clients-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(0,0,0,.05);
+}
+
+.clients-table th, .clients-table td {
+  border: 1px solid #ddd;
+  padding: 0.6rem;
+}
+
+.clients-table th {
+  background: #0d6efd;
+  color: white;
+  text-align: left;
+}
+
+.cta {
+  padding: .5rem 1rem;
+  background: #0d6efd;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: .5rem;
+}
+
+
+/*Final Clientes*/
