@@ -7,6 +7,8 @@ import OrdersView from './views/orders.view.js';
 import LoginView from './views/login.view.js';
 import { renderClientDetail } from './views/client-detail.view.js';
 import { renderOrderDetail } from './views/order-detail.view.js';
+import EquipmentHistoryView from './views/equipment-history.view.js';
+
 
 // Ping para verificar carga
 window.__ping = 'main.js cargado';
@@ -33,6 +35,8 @@ window.addEventListener('DOMContentLoaded', () => {
   registerRoute('#/dashboard', () => app.replaceChildren(DashboardView()));
   registerRoute('#/clients',   () => app.replaceChildren(ClientsView()));
   registerRoute('#/orders',    () => app.replaceChildren(OrdersView()));
+  registerRoute('#/history', () => app.replaceChildren(EquipmentHistoryView()));
+
 
   // Rutas detalle (expuestas en window porque se llaman desde href onclick)
   window.renderClientDetail = renderClientDetail;

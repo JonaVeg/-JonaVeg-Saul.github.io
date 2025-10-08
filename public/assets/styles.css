@@ -133,4 +133,12 @@ button[type="button"] { background:#444; }
 }
 
 
+
+.row { display:flex; gap:.5rem; align-items:center; padding:.5rem 0; }
+.row input, .row select { width:auto; }
+details.card { padding: .75rem 1rem; }
+.row-click { cursor: pointer; }
+.row-click:hover { background: #f6f8fb; }
+
+
 /*Final Clientes*/

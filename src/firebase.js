@@ -1,18 +1,28 @@
+
+
 // src/firebase.js
+// Importa desde CDN (sin bundler)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
+
+// Auth
 import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut
+  getAuth, onAuthStateChanged,
+  signInWithEmailAndPassword, signOut
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
+
+// Firestore
 import {
   getFirestore, serverTimestamp, collection, doc, addDoc, getDoc,
   getDocs, setDoc, updateDoc, query, where, orderBy, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
-import {
-  getStorage, ref as sRef, uploadBytes, getDownloadURL
-} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-storage.js';
 
-// TODO: pon tus credenciales reales
-// src/firebase.js (solo ejemplo — usa tus valores reales)
+// Realtime Database (RTDB)
+import {
+  getDatabase, ref as rRef, push as rPush, set as rSet,
+  get as rGet, child, onValue
+} from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js';
+
+// ---------- TU CONFIG ----------
 const firebaseConfig = {
   apiKey: "AIzaSyASCD2RYDE7gur9cC6LoqUmwmklfEasIqo",
   authDomain: "evrepars.firebaseapp.com",
@@ -24,14 +34,27 @@ const firebaseConfig = {
 
 
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+// ⚠️ Inicializa primero y luego usa `app`
+export const app = initializeApp(firebaseConfig);
 
+// Servicios
+export const auth  = getAuth(app);
+export const db    = getFirestore(app);
+export const rtdb  = getDatabase(app);
+
+// Helpers estilo “SDK re-export”
 export const fx = {
+  // firestore
   serverTimestamp, collection, doc, addDoc, getDoc, getDocs,
   setDoc, updateDoc, query, where, orderBy, Timestamp,
-  onAuthStateChanged, signInWithEmailAndPassword, signOut,
-  sRef, uploadBytes, getDownloadURL
+  // auth
+  onAuthStateChanged, signInWithEmailAndPassword, signOut
 };
+
+export const rfx = {
+  rRef, rPush, rSet, rGet, child, onValue
+};
+
+// Pequeña prueba opcional
+// console.log('[FIREBASE] listo', app.options?.projectId);
+

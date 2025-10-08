@@ -1,20 +1,23 @@
 // src/currency.js
-function sumLine(items, usdToMxn) {
+function sum(items, usdToMxn) {
   let mxn = 0, usd = 0;
   for (const it of items) {
-    const qty = it.qty ?? it.hours ?? 0;
-    const price = it.unitPrice ?? it.ratePerHour ?? 0;
+    const qty = Number(it.qty ?? it.hours ?? 0);
+    const price = Number(it.unitPrice ?? it.ratePerHour ?? 0);
     const total = qty * price;
-    if ((it.currency || 'MXN') === 'USD') usd += total; else mxn += total;
+    (it.currency === 'USD') ? usd += total : mxn += total;
   }
-  return { mxn, usd, mxnAll: mxn + usd * usdToMxn, usdAll: usd + mxn / usdToMxn };
+  return {
+    subtotalMXN: mxn + usd * usdToMxn,
+    subtotalUSD: usd + mxn / usdToMxn
+  };
 }
 
 export function calcTotals({ parts=[], consumables=[], labor=[] }, usdToMxn=18.2, taxRate=0.16) {
-  const a = sumLine(parts, usdToMxn);
-  const b = sumLine(consumables, usdToMxn);
-  const c = sumLine(labor, usdToMxn);
-  const subtotalMXN = a.mxnAll + b.mxnAll + c.mxnAll;
+  const a = sum(parts, usdToMxn);
+  const b = sum(consumables, usdToMxn);
+  const c = sum(labor, usdToMxn);
+  const subtotalMXN = a.subtotalMXN + b.subtotalMXN + c.subtotalMXN;
   const taxMXN = subtotalMXN * taxRate;
   const totalMXN = subtotalMXN + taxMXN;
 

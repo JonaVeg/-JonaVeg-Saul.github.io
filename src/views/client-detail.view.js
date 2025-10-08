@@ -27,20 +27,33 @@ export function renderClientDetail(clientId) {
     </table>
 
     <h3>Órdenes (OST)</h3>
-    <button id="btnNewOrder" class="cta">➕ Nueva OST</button>
-    <table class="clients-table" style="margin-top:.5rem;">
+    <div class="card" style="margin:.5rem 0;">
+      <button id="btnNewOrder" class="cta">➕ Nueva OST</button>
+      <button id="btnReload" style="margin-left:.5rem;">Recargar</button>
+    </div>
+    <table class="clients-table" style="margin-top:.25rem;">
       <thead><tr><th>Folio</th><th>Estatus</th><th>Equipo</th><th>Fecha</th><th></th></tr></thead>
       <tbody id="ordBody"><tr><td colspan="5" style="text-align:center;">Cargando...</td></tr></tbody>
     </table>
   `;
   app.replaceChildren(el);
 
-  const boxClient = el.querySelector('#boxClient');
-  const eqBody = el.querySelector('#eqBody');
-  const ordBody = el.querySelector('#ordBody');
-  const formEq = el.querySelector('#formEq');
-  const eqMsg = el.querySelector('#eqMsg');
+  const boxClient   = el.querySelector('#boxClient');
+  const eqBody      = el.querySelector('#eqBody');
+  const ordBody     = el.querySelector('#ordBody');
+  const formEq      = el.querySelector('#formEq');
+  const eqMsg       = el.querySelector('#eqMsg');
   const btnNewOrder = el.querySelector('#btnNewOrder');
+  const btnReload   = el.querySelector('#btnReload');
+
+  const fmtDate = (any) => {
+    try {
+      if (any?.toDate) return any.toDate().toLocaleDateString();
+      if (any instanceof Date) return any.toLocaleDateString();
+      if (typeof any === 'string') return new Date(any).toLocaleDateString();
+    } catch {}
+    return '-';
+  };
 
   // Cargar datos del cliente
   (async () => {
@@ -52,64 +65,123 @@ export function renderClientDetail(clientId) {
       <small>${c?.address ?? ''}</small>
     `;
 
-    // Equipos
+    // -------- Equipos
     async function loadEquipments() {
+      console.log('[EQUIPMENTS] load for client', clientId);
       eqBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">Cargando...</td></tr>`;
-      const q = fx.query(fx.collection(db, 'equipments'), fx.where('clientId', '==', clientId));
-      const snap = await fx.getDocs(q);
-      const rows = [];
-      snap.forEach(d => {
-        const e = d.data();
-        rows.push(`
-          <tr>
-            <td>${e.serial}</td>
-            <td>${e.brand ?? ''} ${e.model ?? ''}</td>
-            <td><button data-new-ost="${d.id}" class="cta">Nueva OST</button></td>
-          </tr>
-        `);
-      });
-      eqBody.innerHTML = rows.length ? rows.join('') :
-        `<tr><td colspan="3" style="text-align:center;color:#888;">Sin equipos</td></tr>`;
-
-      // Botones "Nueva OST" desde cada equipo
-      eqBody.querySelectorAll('[data-new-ost]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const equipmentId = btn.getAttribute('data-new-ost');
-          window.renderOrderDetail(null, clientId, equipmentId);
+      try {
+        const q = fx.query(fx.collection(db, 'equipments'), fx.where('clientId', '==', clientId));
+        const snap = await fx.getDocs(q);
+        const rows = [];
+        snap.forEach(d => {
+          const e = d.data();
+          rows.push(`
+            <tr>
+              <td>${e.serial}</td>
+              <td>${e.brand ?? ''} ${e.model ?? ''}</td>
+              <td><button data-new-ost="${d.id}" class="cta">Nueva OST</button></td>
+            </tr>
+          `);
         });
-      });
+        eqBody.innerHTML = rows.length ? rows.join('') :
+          `<tr><td colspan="3" style="text-align:center;color:#888;">Sin equipos</td></tr>`;
+
+        // Botones "Nueva OST" por equipo
+        eqBody.querySelectorAll('[data-new-ost]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const equipmentId = btn.getAttribute('data-new-ost');
+            window.renderOrderDetail(null, clientId, equipmentId);
+          });
+        });
+        console.log('[EQUIPMENTS] loaded rows:', rows.length);
+      } catch (err) {
+        console.error('[EQUIPMENTS] load error', err);
+        eqBody.innerHTML = `<tr><td colspan="3" style="color:#d00;">Error al cargar equipos</td></tr>`;
+      }
     }
 
-    // Órdenes del cliente
+    // -------- Órdenes del cliente (con fallback si falta índice o permisos)
     async function loadOrders() {
+      console.log('[ORDERS] load for client', clientId);
       ordBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Cargando...</td></tr>`;
-      const q = fx.query(
+
+      const baseQuery = fx.query(
         fx.collection(db, 'orders'),
-        fx.where('clientId', '==', clientId),
-        fx.orderBy('createdAt', 'desc')
+        fx.where('clientId', '==', clientId)
       );
-      const snap = await fx.getDocs(q);
-      const rows = [];
-      snap.forEach(d => {
-        const o = d.data();
-        const dateStr = o.date?.toDate?.().toLocaleDateString?.() ?? '-';
-        rows.push(`
+
+      const renderFromSnap = (snap, note='') => {
+        const rows = [];
+        snap.forEach(d => {
+          const o = d.data();
+          const when = o.createdAt || o.date;
+          rows.push(`
+            <tr>
+              <td>${o.folio || '-'}</td>
+              <td>${o.status || '-'}</td>
+              <td>${o.equipmentId || '-'}</td>
+              <td>${fmtDate(when)}</td>
+              <td><button data-open="${d.id}">Abrir</button></td>
+            </tr>
+          `);
+        });
+        ordBody.innerHTML = rows.length ? rows.join('') :
+          `<tr><td colspan="5" style="text-align:center;color:#888;">Sin órdenes</td></tr>`;
+        ordBody.querySelectorAll('[data-open]').forEach(b => {
+          b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
+        });
+        console.log(`[ORDERS] rendered rows ${note}:`, rows.length);
+      };
+
+      const renderFromArray = (arr, note='fallback') => {
+        arr.sort((a,b) => {
+          const as = a.createdAt?.seconds ?? (a.date?.seconds ?? 0);
+          const bs = b.createdAt?.seconds ?? (b.date?.seconds ?? 0);
+          return bs - as;
+        });
+        const rows = arr.map(o => `
           <tr>
-            <td>${o.folio}</td>
-            <td>${o.status}</td>
-            <td>${o.equipmentId}</td>
-            <td>${dateStr}</td>
-            <td><button data-open="${d.id}">Abrir</button></td>
+            <td>${o.folio || '-'}</td>
+            <td>${o.status || '-'}</td>
+            <td>${o.equipmentId || '-'}</td>
+            <td>${fmtDate(o.createdAt || o.date)}</td>
+            <td><button data-open="${o.__id}">Abrir</button></td>
           </tr>
         `);
-      });
-      ordBody.innerHTML = rows.length ? rows.join('') :
-        `<tr><td colspan="5" style="text-align:center;color:#888;">Sin órdenes</td></tr>`;
+        ordBody.innerHTML = rows.length ? rows.join('') :
+          `<tr><td colspan="5" style="text-align:center;color:#888;">Sin órdenes</td></tr>`;
+        ordBody.querySelectorAll('[data-open]').forEach(b => {
+          b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
+        });
+        console.log(`[ORDERS] rendered rows (${note}):`, rows.length);
+      };
 
-      // Abrir orden
-      ordBody.querySelectorAll('[data-open]').forEach(b => {
-        b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
-      });
+      try {
+        // Camino rápido: requiere índice
+        const q = fx.query(baseQuery, fx.orderBy('createdAt', 'desc'));
+        const snap = await fx.getDocs(q);
+        console.log('[ORDERS] indexed query ok, count =', snap.size);
+        renderFromSnap(snap, 'indexed');
+      } catch (err) {
+        console.warn('[ORDERS] indexed query failed → fallback', err?.code, err?.message);
+
+        // Si es permisos, mostramos mensaje claro y no seguimos
+        if (err?.code === 'permission-denied') {
+          ordBody.innerHTML = `<tr><td colspan="5" style="color:#d00;">Sin permisos para leer órdenes. Revisa Reglas de Firestore.</td></tr>`;
+          return;
+        }
+
+        // Fallback: sin orderBy, ordenamos en memoria
+        try {
+          const snap = await fx.getDocs(baseQuery);
+          const arr = [];
+          snap.forEach(d => arr.push({ __id: d.id, ...d.data() }));
+          renderFromArray(arr);
+        } catch (err2) {
+          console.error('[ORDERS] fallback failed', err2);
+          ordBody.innerHTML = `<tr><td colspan="5" style="color:#d00;">Error al cargar órdenes</td></tr>`;
+        }
+      }
     }
 
     // Guardar equipo nuevo
@@ -136,12 +208,15 @@ export function renderClientDetail(clientId) {
       }
     });
 
-    // Botón Nueva OST general (sin elegir equipo todavía)
+    // Botón Nueva OST general
     btnNewOrder.addEventListener('click', () => {
       window.renderOrderDetail(null, clientId, null);
     });
 
-    // Inicializar listas
+    // Botón recargar órdenes
+    btnReload.addEventListener('click', () => loadOrders());
+
+    // Inicializar
     await Promise.all([loadEquipments(), loadOrders()]);
   })();
 }
