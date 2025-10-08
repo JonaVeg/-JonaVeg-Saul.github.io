@@ -78,6 +78,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
 
       <div id="msg" class="muted"></div>
       <button>Guardar OST</button>
+      <button type="button" id="btnPrint" class="muted">Imprimir / PDF</button>
     </form>
   `;
   app.replaceChildren(el);
@@ -326,4 +327,157 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       msg.textContent = '✖ Error al guardar: ' + (err?.message || String(err));
     }
   });
+
+  // =========================================================
+  // =============  IMPRESIÓN / PDF (integrado)  =============
+  // =========================================================
+
+  // Helpers locales para la plantilla
+  const fmtDate = (any) => {
+    try {
+      if (any?.toDate) return any.toDate().toLocaleDateString();
+      if (any instanceof Date) return any.toLocaleDateString();
+      if (typeof any === 'string') return new Date(any).toLocaleDateString();
+    } catch {}
+    return '-';
+  };
+  const money    = (n) => (Number(n||0)).toLocaleString('es-MX',{style:'currency',currency:'MXN'});
+  const moneyUSD = (n) => (Number(n||0)).toLocaleString('en-US',{style:'currency',currency:'USD'});
+
+  function buildPrintableHtml({ id, o, c, e }) {
+    const parts        = o?.quote?.parts || [];
+    const consumables  = o?.quote?.consumables || [];
+    const labor        = o?.quote?.labor || [];
+    const t            = o?.quote?.totals || {};
+    const rate         = o?.quote?.exchangeRate?.usdToMxn;
+
+    const rows = (arr, isLabor=false) => arr.map(x=>`
+      <tr>
+        <td>${x.description||''}</td>
+        ${isLabor ? `
+          <td>${x.hours||0}</td>
+          <td>${x.ratePerHour||0}</td>
+        ` : `
+          <td>${x.partNumber||''}</td>
+          <td>${x.qty||0}</td>
+          <td>${x.unitPrice||0}</td>
+        `}
+        <td>${x.currency||'MXN'}</td>
+      </tr>
+    `).join('');
+
+    const styles = `
+      <style>
+        *{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
+        h1,h2,h3{margin:.2rem 0}
+        .muted{color:#666}
+        .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+        .card{border:1px solid #ddd;border-radius:10px;padding:12px;margin:8px 0}
+        table{width:100%;border-collapse:collapse;margin:.3rem 0}
+        th,td{border:1px solid #ddd;padding:6px;font-size:12px}
+        th{background:#f5f7ff;text-align:left}
+        .totals td{font-weight:bold}
+        .small{font-size:12px}
+        @media print {.no-print{display:none}}
+      </style>
+    `;
+
+    return `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8"/>
+        <title>OST ${o?.folio||id}</title>
+        ${styles}
+      </head>
+      <body>
+        <div class="no-print" style="text-align:right;margin:.5rem 0;">
+          <button onclick="window.print()">Imprimir</button>
+        </div>
+
+        <h2>Orden de Servicio Técnico (OST)</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Datos de la OST</h3>
+            <div class="small">
+              <div><b>Folio:</b> ${o?.folio||id}</div>
+              <div><b>Estatus:</b> ${o?.status||'-'}</div>
+              <div><b>Fecha:</b> ${fmtDate(o?.date||o?.createdAt)}</div>
+            </div>
+          </div>
+          <div class="card">
+            <h3>Cliente</h3>
+            <div class="small">
+              <div><b>Nombre:</b> ${c?.name||'-'}</div>
+              <div><b>Contacto:</b> ${c?.email||'-'} • ${c?.phone||'-'}</div>
+              <div><b>Dirección:</b> ${c?.address||'-'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Equipo</h3>
+          <div class="small">
+            <div><b>Serie:</b> ${e?.serial||'-'}</div>
+            <div><b>Marca/Modelo:</b> ${e?.brand||''} ${e?.model||''}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Diagnóstico / Servicio</h3>
+          <div class="small"><b>Problema:</b> ${o?.symptom||'-'}</div>
+          <div class="small"><b>Diagnóstico:</b> ${o?.diagnosis||'-'}</div>
+          <div class="small"><b>Acciones:</b> ${o?.actions||'-'}</div>
+        </div>
+
+        <div class="card">
+          <h3>Cotización</h3>
+          <div class="small">Tipo de cambio USD→MXN: <b>${rate || '-'}</b></div>
+
+          <h4>Refacciones</h4>
+          <table>
+            <thead><tr><th>Descripción</th><th>SKU</th><th>Cant.</th><th>P. Unit</th><th>Moneda</th></tr></thead>
+            <tbody>${rows(parts)}</tbody>
+          </table>
+
+          <h4>Consumibles</h4>
+          <table>
+            <thead><tr><th>Descripción</th><th>SKU</th><th>Cant.</th><th>P. Unit</th><th>Moneda</th></tr></thead>
+            <tbody>${rows(consumables)}</tbody>
+          </table>
+
+          <h4>Mano de obra</h4>
+          <table>
+            <thead><tr><th>Descripción</th><th>Horas</th><th>Tarifa</th><th>Moneda</th></tr></thead>
+            <tbody>${rows(labor,true)}</tbody>
+          </table>
+
+          <table class="totals">
+            <tbody>
+              <tr><td>Subtotal (MXN)</td><td>${money(t.subtotalMXN)}</td></tr>
+              <tr><td>IVA (MXN)</td><td>${money(t.taxMXN)}</td></tr>
+              <tr><td>Total (MXN)</td><td>${money(t.grandTotalMXN)}</td></tr>
+              <tr><td>Subtotal (USD)</td><td>${moneyUSD(t.subtotalUSD)}</td></tr>
+              <tr><td>Tax (USD)</td><td>${moneyUSD(t.taxUSD)}</td></tr>
+              <tr><td>Total (USD)</td><td>${moneyUSD(t.grandTotalUSD)}</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="small muted">Generado: ${new Date().toLocaleString()}</div>
+      </body>
+    </html>
+    `;
+  }
+
+  // Listener del botón imprimir
+  // --- imprimir / PDF: apertura SÍNCRONA ---
+// … dentro de renderOrderDetail, después de crear el form …
+// dentro de renderOrderDetail…
+const btnPrint = el.querySelector('#btnPrint');
+btnPrint.addEventListener('click', () => {
+  if (!orderId) return alert('Primero guarda la OST para poder imprimir.');
+  location.hash = `#/print?id=${orderId}`;
+});
+
 }

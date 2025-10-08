@@ -190,6 +190,8 @@ export function renderClientDetail(clientId) {
       const fd = new FormData(formEq);
       const payload = {
         clientId,
+        serial,
+        serialUpper: serial?.toUpperCase() || '',
         serial: fd.get('serial')?.toString().trim(),
         brand: fd.get('brand')?.toString().trim() || '',
         model: fd.get('model')?.toString().trim() || '',
@@ -206,6 +208,7 @@ export function renderClientDetail(clientId) {
         console.error('[EQUIPMENTS] create error', err);
         eqMsg.textContent = '✖ Error al guardar';
       }
+      
     });
 
     // Botón Nueva OST general

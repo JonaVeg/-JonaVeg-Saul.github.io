@@ -8,7 +8,7 @@ import LoginView from './views/login.view.js';
 import { renderClientDetail } from './views/client-detail.view.js';
 import { renderOrderDetail } from './views/order-detail.view.js';
 import EquipmentHistoryView from './views/equipment-history.view.js';
-
+import OrderPrintView from './views/order-print.view.js';
 
 // Ping para verificar carga
 window.__ping = 'main.js cargado';
@@ -35,7 +35,14 @@ window.addEventListener('DOMContentLoaded', () => {
   registerRoute('#/dashboard', () => app.replaceChildren(DashboardView()));
   registerRoute('#/clients',   () => app.replaceChildren(ClientsView()));
   registerRoute('#/orders',    () => app.replaceChildren(OrdersView()));
-  registerRoute('#/history', () => app.replaceChildren(EquipmentHistoryView()));
+  registerRoute('#/history',   () => app.replaceChildren(EquipmentHistoryView()));
+
+  // IMPORTANTE: no reasignar 'app'; simplemente renderiza la vista
+  // OrderPrintView debe leer el id desde location.hash (o recibir ctx.query si lo deseas)
+  registerRoute('#/print', () => {
+  OrderPrintView();
+});
+
 
 
   // Rutas detalle (expuestas en window porque se llaman desde href onclick)
@@ -44,7 +51,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // ===== Guard de rutas protegidas =====
   function protectRoutes() {
-    const protectedPaths = ['#/dashboard', '#/clients', '#/orders'];
+    // Incluye history y print si quieres forzar login antes de verlos
+    const protectedPaths = ['#/dashboard', '#/clients', '#/orders', '#/history', '#/print'];
     const wants = (location.hash || '#/login').split('?')[0];
     const user  = auth.currentUser;
 
@@ -89,7 +97,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // ===== Mostrar/ocultar topbar en login =====
   function refreshTopbar() {
     if (!topbar) return;
-    topbar.style.display = (location.hash === '#/login') ? 'none' : 'flex';
+    topbar.style.display = (location.hash.split('?')[0] === '#/login') ? 'none' : 'flex';
   }
   refreshTopbar();
 
@@ -97,10 +105,9 @@ window.addEventListener('DOMContentLoaded', () => {
   const form  = document.getElementById('loginForm');
   const email = document.getElementById('loginEmail');
   const pass  = document.getElementById('loginPass');
-  const btn   = document.getElementById('btnLogin');
 
   console.log('[BOOT] elementos', {
-    hasForm: !!form, hasEmail: !!email, hasPass: !!pass, hasBtn: !!btn
+    hasForm: !!form, hasEmail: !!email, hasPass: !!pass
   });
 
   if (form) {
