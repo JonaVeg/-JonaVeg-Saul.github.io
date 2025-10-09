@@ -589,3 +589,14 @@ button.mini {
 
 /* Opcional: suavizar el main al usar topbar sticky */
 main#app { padding-top: 1rem; }
+
+
+
+
+#technicianId {
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: .65rem .8rem;
+  font-size: .95rem;
+  background: #fff;
+}

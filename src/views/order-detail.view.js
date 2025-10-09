@@ -11,6 +11,9 @@ function genFolio() {
   return `OST-${y}${m}-${r}`;
 }
 
+// 👉 técnicos por defecto (por si la colección está vacía)
+const DEFAULT_TECHS = ['Víctor', 'Saúl'];
+
 export function renderOrderDetail(orderId = null, clientId = null, equipmentId = null) {
   console.log('[ORDER DETAIL] open', { orderId, clientId, equipmentId });
   const app = document.getElementById('app');
@@ -36,7 +39,13 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
         </label>
         <label>ClienteId <input name="clientId" required value="${clientId ?? ''}"/></label>
         <label>EquipoId  <input name="equipmentId" required value="${equipmentId ?? ''}"/></label>
-        <label>TécnicoId <input name="technicianId" /></label>
+
+        <!-- 👉 Select de técnico (opción única) -->
+        <label>Técnico
+          <select name="technicianId" id="technicianId">
+            <option value="">Selecciona un técnico...</option>
+          </select>
+        </label>
       </div>
 
       <label>Problema / Síntoma <textarea name="symptom" rows="2"></textarea></label>
@@ -87,6 +96,56 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
   const msg = el.querySelector('#msg');
   const totalsBox = el.querySelector('#totals');
   const photosSavedBox = el.querySelector('#photosSaved');
+  const techSelect = el.querySelector('#technicianId');
+
+  // ====== Técnicos: siembra + carga (sin fx.limit) ======
+  async function ensureDefaultTechnicians() {
+    try {
+      const snap = await fx.getDocs(fx.collection(db, 'technicians'));
+      if (!snap.empty) return;
+
+      await Promise.all(
+        DEFAULT_TECHS.map(name =>
+          fx.addDoc(fx.collection(db, 'technicians'), {
+            name, active: true, createdAt: fx.serverTimestamp(),
+          })
+        )
+      );
+    } catch (e) {
+      console.warn('[TECH] ensure default technicians failed:', e);
+    }
+  }
+
+  async function loadTechnicians(preselectId = '') {
+    const techSelect = document.getElementById('technicianId');
+    techSelect.innerHTML = `<option value="">Cargando técnicos...</option>`;
+
+    await ensureDefaultTechnicians();
+
+    let docs = [];
+    try {
+      const snap = await fx.getDocs(fx.collection(db, 'technicians'));
+      snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn('[TECH] load error:', e);
+      // Fallback UI sin Firestore
+      techSelect.innerHTML =
+        `<option value="">Selecciona un técnico...</option>` +
+        DEFAULT_TECHS.map(n => `<option value="${n}">${n}</option>`).join('');
+      if (preselectId) techSelect.value = preselectId;
+      return;
+    }
+
+    docs = docs
+      .filter(t => t.active !== false)
+      .sort((a,b) => String(a.name||'').localeCompare(String(b.name||'')));
+
+    techSelect.innerHTML =
+      `<option value="">Selecciona un técnico...</option>` +
+      docs.map(t => `<option value="${t.id}">${t.name || t.id}</option>`).join('');
+
+    if (preselectId) techSelect.value = preselectId;
+  }
 
   // ===== Helpers cotizador =====
   const addRow = (type) => {
@@ -176,6 +235,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
 
   // ===== Cargar OST si es edición =====
   (async () => {
+    let preselectTechId = '';
     if (!isNew) {
       const snap = await fx.getDoc(fx.doc(db, 'orders', orderId));
       const o = snap.data();
@@ -185,7 +245,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
         form.status.value = o.status ?? 'En revisión';
         form.clientId.value = o.clientId ?? '';
         form.equipmentId.value = o.equipmentId ?? '';
-        form.technicianId.value = o.technicianId ?? '';
+        preselectTechId = o.technicianId ?? '';
         form.symptom.value = o.symptom ?? '';
         form.diagnosis.value = o.diagnosis ?? '';
         form.actions.value = o.actions ?? '';
@@ -215,6 +275,10 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     } else {
       form.date.value = new Date().toISOString().slice(0,10);
     }
+
+    // Carga técnicos al final y preselecciona si venía en la OST
+    await loadTechnicians(preselectTechId);
+
     computeTotals();
   })();
 
@@ -225,13 +289,19 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
 
     const { items, totals, usdToMxn, taxRate } = computeTotals();
 
+    // 👇 Capturamos también el nombre mostrado en el select
+    const techId = techSelect.value.trim();
+    const techName =
+      techSelect.options[techSelect.selectedIndex]?.textContent?.trim() || '';
+
     const base = {
       folio: form.folio.value.trim(),
       date: fx.Timestamp.fromDate(new Date(form.date.value)),
       status: form.status.value,
       clientId: form.clientId.value.trim(),
       equipmentId: form.equipmentId.value.trim(),
-      technicianId: form.technicianId.value.trim(),
+      technicianId: techId,
+      technicianName: techId ? techName : '',   // <-- agregado
       symptom: form.symptom.value.trim(),
       diagnosis: form.diagnosis.value.trim(),
       actions: form.actions.value.trim(),
@@ -249,7 +319,6 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
 
       const fd = new FormData(form);
 
-      // Compresor robusto (evita [object Event])
       async function fileToDataUrlCompressed(file, maxW = 1280, quality = 0.72) {
         if (!file || !file.type?.startsWith('image/')) {
           throw new Error('Archivo no es una imagen válida');
@@ -328,156 +397,10 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     }
   });
 
-  // =========================================================
-  // =============  IMPRESIÓN / PDF (integrado)  =============
-  // =========================================================
-
-  // Helpers locales para la plantilla
-  const fmtDate = (any) => {
-    try {
-      if (any?.toDate) return any.toDate().toLocaleDateString();
-      if (any instanceof Date) return any.toLocaleDateString();
-      if (typeof any === 'string') return new Date(any).toLocaleDateString();
-    } catch {}
-    return '-';
-  };
-  const money    = (n) => (Number(n||0)).toLocaleString('es-MX',{style:'currency',currency:'MXN'});
-  const moneyUSD = (n) => (Number(n||0)).toLocaleString('en-US',{style:'currency',currency:'USD'});
-
-  function buildPrintableHtml({ id, o, c, e }) {
-    const parts        = o?.quote?.parts || [];
-    const consumables  = o?.quote?.consumables || [];
-    const labor        = o?.quote?.labor || [];
-    const t            = o?.quote?.totals || {};
-    const rate         = o?.quote?.exchangeRate?.usdToMxn;
-
-    const rows = (arr, isLabor=false) => arr.map(x=>`
-      <tr>
-        <td>${x.description||''}</td>
-        ${isLabor ? `
-          <td>${x.hours||0}</td>
-          <td>${x.ratePerHour||0}</td>
-        ` : `
-          <td>${x.partNumber||''}</td>
-          <td>${x.qty||0}</td>
-          <td>${x.unitPrice||0}</td>
-        `}
-        <td>${x.currency||'MXN'}</td>
-      </tr>
-    `).join('');
-
-    const styles = `
-      <style>
-        *{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;}
-        h1,h2,h3{margin:.2rem 0}
-        .muted{color:#666}
-        .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
-        .card{border:1px solid #ddd;border-radius:10px;padding:12px;margin:8px 0}
-        table{width:100%;border-collapse:collapse;margin:.3rem 0}
-        th,td{border:1px solid #ddd;padding:6px;font-size:12px}
-        th{background:#f5f7ff;text-align:left}
-        .totals td{font-weight:bold}
-        .small{font-size:12px}
-        @media print {.no-print{display:none}}
-      </style>
-    `;
-
-    return `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="utf-8"/>
-        <title>OST ${o?.folio||id}</title>
-        ${styles}
-      </head>
-      <body>
-        <div class="no-print" style="text-align:right;margin:.5rem 0;">
-          <button onclick="window.print()">Imprimir</button>
-        </div>
-
-        <h2>Orden de Servicio Técnico (OST)</h2>
-        <div class="grid">
-          <div class="card">
-            <h3>Datos de la OST</h3>
-            <div class="small">
-              <div><b>Folio:</b> ${o?.folio||id}</div>
-              <div><b>Estatus:</b> ${o?.status||'-'}</div>
-              <div><b>Fecha:</b> ${fmtDate(o?.date||o?.createdAt)}</div>
-            </div>
-          </div>
-          <div class="card">
-            <h3>Cliente</h3>
-            <div class="small">
-              <div><b>Nombre:</b> ${c?.name||'-'}</div>
-              <div><b>Contacto:</b> ${c?.email||'-'} • ${c?.phone||'-'}</div>
-              <div><b>Dirección:</b> ${c?.address||'-'}</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Equipo</h3>
-          <div class="small">
-            <div><b>Serie:</b> ${e?.serial||'-'}</div>
-            <div><b>Marca/Modelo:</b> ${e?.brand||''} ${e?.model||''}</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h3>Diagnóstico / Servicio</h3>
-          <div class="small"><b>Problema:</b> ${o?.symptom||'-'}</div>
-          <div class="small"><b>Diagnóstico:</b> ${o?.diagnosis||'-'}</div>
-          <div class="small"><b>Acciones:</b> ${o?.actions||'-'}</div>
-        </div>
-
-        <div class="card">
-          <h3>Cotización</h3>
-          <div class="small">Tipo de cambio USD→MXN: <b>${rate || '-'}</b></div>
-
-          <h4>Refacciones</h4>
-          <table>
-            <thead><tr><th>Descripción</th><th>SKU</th><th>Cant.</th><th>P. Unit</th><th>Moneda</th></tr></thead>
-            <tbody>${rows(parts)}</tbody>
-          </table>
-
-          <h4>Consumibles</h4>
-          <table>
-            <thead><tr><th>Descripción</th><th>SKU</th><th>Cant.</th><th>P. Unit</th><th>Moneda</th></tr></thead>
-            <tbody>${rows(consumables)}</tbody>
-          </table>
-
-          <h4>Mano de obra</h4>
-          <table>
-            <thead><tr><th>Descripción</th><th>Horas</th><th>Tarifa</th><th>Moneda</th></tr></thead>
-            <tbody>${rows(labor,true)}</tbody>
-          </table>
-
-          <table class="totals">
-            <tbody>
-              <tr><td>Subtotal (MXN)</td><td>${money(t.subtotalMXN)}</td></tr>
-              <tr><td>IVA (MXN)</td><td>${money(t.taxMXN)}</td></tr>
-              <tr><td>Total (MXN)</td><td>${money(t.grandTotalMXN)}</td></tr>
-              <tr><td>Subtotal (USD)</td><td>${moneyUSD(t.subtotalUSD)}</td></tr>
-              <tr><td>Tax (USD)</td><td>${moneyUSD(t.taxUSD)}</td></tr>
-              <tr><td>Total (USD)</td><td>${moneyUSD(t.grandTotalUSD)}</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="small muted">Generado: ${new Date().toLocaleString()}</div>
-      </body>
-    </html>
-    `;
-  }
-
-  // Listener del botón imprimir
-  // --- imprimir / PDF: apertura SÍNCRONA ---
-// … dentro de renderOrderDetail, después de crear el form …
-// dentro de renderOrderDetail…
-const btnPrint = el.querySelector('#btnPrint');
-btnPrint.addEventListener('click', () => {
-  if (!orderId) return alert('Primero guarda la OST para poder imprimir.');
-  location.hash = `#/print?id=${orderId}`;
-});
-
+  // ===== Botón imprimir → navega a #/print?id=... =====
+  const btnPrint = el.querySelector('#btnPrint');
+  btnPrint.addEventListener('click', () => {
+    if (!orderId) return alert('Primero guarda la OST para poder imprimir.');
+    location.hash = `#/print?id=${orderId}`;
+  });
 }
