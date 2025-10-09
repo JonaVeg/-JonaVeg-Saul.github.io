@@ -1,4 +1,3 @@
-// src/main.js
 import { auth, fx } from './firebase.js';
 import { startRouter, registerRoute } from './router.js';
 import DashboardView from './views/dashboard.view.js';
@@ -13,63 +12,65 @@ import OrderPrintView from './views/order-print.view.js';
 // Ping para verificar carga
 window.__ping = 'main.js cargado';
 
-// Espera a que el DOM exista antes de tocar #app o .topbar
 window.addEventListener('DOMContentLoaded', () => {
   console.log('[BOOT] DOMContentLoaded');
 
-  // ===== Referencias seguras al DOM =====
+  // ===== Referencias =====
   const app = document.getElementById('app');
+  const topbar = document.querySelector('.topbar');
+
   if (!app) {
     console.error('[BOOT] No existe #app en tu HTML. Agrega <main id="app"></main>.');
     return;
   }
 
-  const topbar = document.querySelector('.topbar');
-
-  // ===== Router: registro de rutas =====
-  registerRoute('#/login', () => {
-    console.log('[ROUTE] #/login');
-    app.replaceChildren(LoginView()); // LoginView imprime [LOGIN VIEW] render
-  });
-
+  // ===== Rutas =====
+  registerRoute('#/login', () => app.replaceChildren(LoginView()));
   registerRoute('#/dashboard', () => app.replaceChildren(DashboardView()));
   registerRoute('#/clients',   () => app.replaceChildren(ClientsView()));
   registerRoute('#/orders',    () => app.replaceChildren(OrdersView()));
   registerRoute('#/history',   () => app.replaceChildren(EquipmentHistoryView()));
+  registerRoute('#/print',     () => OrderPrintView());
 
-  // IMPORTANTE: no reasignar 'app'; simplemente renderiza la vista
-  // OrderPrintView debe leer el id desde location.hash (o recibir ctx.query si lo deseas)
-  registerRoute('#/print', () => {
-  OrderPrintView();
-});
-
-
-
-  // Rutas detalle (expuestas en window porque se llaman desde href onclick)
+  // Rutas de detalle (globales)
   window.renderClientDetail = renderClientDetail;
   window.renderOrderDetail  = renderOrderDetail;
 
-  // ===== Guard de rutas protegidas =====
+  // ===== Protección de rutas =====
   function protectRoutes() {
-    // Incluye history y print si quieres forzar login antes de verlos
     const protectedPaths = ['#/dashboard', '#/clients', '#/orders', '#/history', '#/print'];
     const wants = (location.hash || '#/login').split('?')[0];
     const user  = auth.currentUser;
 
-    console.log('[ROUTER] protectRoutes check', { wants, uid: user?.uid || null });
-
     if (!user && protectedPaths.includes(wants)) {
-      console.warn('[ROUTER] blocked (no auth) → redirect to #/login');
+      console.warn('[ROUTER] bloqueado (no auth) → login');
       location.hash = '#/login';
       return true;
     }
     return false;
   }
 
+  // ===== Topbar visible / oculta en login =====
+  function refreshTopbar() {
+    if (!topbar) return;
+    const hide = (location.hash.split('?')[0] === '#/login');
+    topbar.style.display = hide ? 'none' : 'flex';
+  }
+
+  // ===== Marca activo el link del menú =====
+  function markActiveNav() {
+    const route = (location.hash || '#/dashboard').split('?')[0];
+    document.querySelectorAll('.mainnav a').forEach(a => {
+      a.classList.toggle('active', a.getAttribute('data-route') === route);
+    });
+  }
+
+  // ===== Eventos de hash =====
   window.addEventListener('hashchange', () => {
     console.log('[ROUTER] hashchange →', location.hash);
     protectRoutes();
-    refreshTopbar(); // mantener topbar acorde a la ruta
+    refreshTopbar();
+    markActiveNav();
   });
 
   // ===== Estado de autenticación =====
@@ -80,42 +81,29 @@ window.addEventListener('DOMContentLoaded', () => {
       email: user?.email || null
     });
 
-    // Si inicia sesión en /login (o sin hash), redirige a dashboard
     if (user && (location.hash === '#/login' || !location.hash)) {
-      console.log('[AUTH] redirect → #/dashboard');
       location.hash = '#/dashboard';
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     }
 
-    // Si no hay sesión y se intenta ir a ruta protegida → login
     if (!user) protectRoutes();
   });
 
-  // ===== Arranque del router =====
+  // ===== Arranque inicial =====
   startRouter('#/login');
-
-  // ===== Mostrar/ocultar topbar en login =====
-  function refreshTopbar() {
-    if (!topbar) return;
-    topbar.style.display = (location.hash.split('?')[0] === '#/login') ? 'none' : 'flex';
-  }
   refreshTopbar();
+  markActiveNav();
 
-  // ===== Soporte de login por formulario directo (si existe en el HTML) =====
+  // ===== Login manual (si el form existe) =====
   const form  = document.getElementById('loginForm');
   const email = document.getElementById('loginEmail');
   const pass  = document.getElementById('loginPass');
-
-  console.log('[BOOT] elementos', {
-    hasForm: !!form, hasEmail: !!email, hasPass: !!pass
-  });
 
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const em = email.value.trim();
       const pw = pass.value.trim();
-      console.log('[LOGIN] submit', { emailMasked: em.replace(/(.).+@/, '$1***@') });
 
       try {
         const cred = await fx.signInWithEmailAndPassword(auth, em, pw);
@@ -124,12 +112,12 @@ window.addEventListener('DOMContentLoaded', () => {
         location.hash = '#/dashboard';
         window.dispatchEvent(new HashChangeEvent('hashchange'));
       } catch (err) {
-        console.error('[LOGIN] error', { code: err?.code, message: err?.message, raw: err });
+        console.error('[LOGIN] error', err);
         alert((err?.code || 'Error') + ': ' + (err?.message || 'No se pudo iniciar sesión'));
       }
     });
   }
-}); // <-- DOMContentLoaded
+});
 
 // ===== Errores globales =====
 window.addEventListener('error', (ev) => {

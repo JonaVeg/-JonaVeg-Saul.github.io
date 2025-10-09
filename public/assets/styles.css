@@ -142,3 +142,450 @@ details.card { padding: .75rem 1rem; }
 
 
 /*Final Clientes*/
+
+
+
+
+/* === DASHBOARD === */
+.dash { padding: 1rem; }
+
+.dash-hero {
+  text-align: center;
+  padding: 1.5rem 1.25rem;
+  border-radius: 16px;
+  background:
+    radial-gradient(60% 60% at 15% 10%, rgba(13,110,253,.10), transparent 60%),
+    radial-gradient(60% 60% at 85% 90%, rgba(32,201,151,.12), transparent 60%),
+    #fff;
+}
+
+.dash-hero h1 { margin: .2rem 0 .25rem; }
+.dash-hero .tip { display:block; margin-top: .5rem; }
+
+.dash-search {
+  margin: .9rem auto .25rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: .5rem;
+  max-width: 640px;
+}
+.dash-search input {
+  padding: .8rem .9rem;
+  border-radius: 12px;
+  border: 1px solid #dcdfe5;
+  background: #fff;
+  font-size: 1rem;
+}
+.dash-search .cta { border-radius: 12px; padding: .8rem 1.25rem; }
+
+.dash-results { margin-top: 1rem; display: grid; gap: .75rem; }
+.loading,
+.empty { text-align: center; padding: 2rem 1rem; font-weight: 500; }
+.empty > div:first-child { font-size: 1.6rem; margin-bottom: .25rem; }
+
+.result-card { padding: 1rem; }
+.result-head {
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+}
+.result-head .kicker { font-size: .8rem; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; }
+.result-head .title { font-size: 1.05rem; }
+.result-head .sub { margin-top: .15rem; }
+.badge {
+  background: #eef4ff; color: #0d6efd; font-weight: 600;
+  padding: .35rem .55rem; border-radius: 999px; font-size: .85rem;
+}
+
+.table-wrap { margin-top: .6rem; overflow: auto; }
+.mini-table { width: 100%; border-collapse: collapse; }
+.mini-table th, .mini-table td {
+  border: 1px solid #e8e8e8; padding: .5rem .55rem; font-size: .92rem;
+}
+.mini-table th { background: #f7f9ff; text-align: left; }
+
+button.mini {
+  background: #0d6efd; color: #fff; border: none;
+  padding: .35rem .6rem; border-radius: 8px; cursor: pointer;
+  font-size: .85rem;
+}
+
+/* Responsive */
+@media (max-width: 720px) {
+  .dash-search { grid-template-columns: 1fr; }
+  .result-head { flex-direction: column; align-items: flex-start; }
+  .badge { align-self: flex-start; }
+}
+
+
+/* === CLIENTES (mejorado) === */
+.clients-section {
+  padding: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.clients-section h1 {
+  font-size: 1.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.clients-section p.muted {
+  margin-bottom: 1rem;
+  color: #6b7280;
+}
+
+/* --- Formulario --- */
+#addBox {
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0,0,0,.04);
+  overflow: hidden;
+}
+
+#addBox summary {
+  cursor: pointer;
+  padding: .9rem 1.2rem;
+  font-weight: 600;
+  font-size: 1rem;
+  background: #f9fafc;
+  color: #111;
+  border-bottom: 1px solid #eee;
+  list-style: none;
+}
+#addBox[open] summary { border-bottom: 1px solid #ddd; }
+
+#formAdd {
+  padding: 1rem 1.2rem 1.25rem;
+  background: #fff;
+  display: grid;
+  gap: .6rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#formAdd input {
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: .7rem .9rem;
+  font-size: .95rem;
+  transition: border .2s, box-shadow .2s;
+}
+
+#formAdd input:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 3px rgba(13,110,253,.12);
+  outline: none;
+}
+
+#formAdd button {
+  grid-column: 1 / -1;
+  padding: .9rem;
+  font-weight: 600;
+  border-radius: 12px;
+  background: #0d6efd;
+  border: none;
+  color: white;
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .2s ease;
+}
+#formAdd button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 15px -8px rgba(13,110,253,.4);
+}
+
+#addMsg {
+  text-align: center;
+  padding: .5rem;
+  font-size: .9rem;
+}
+
+/* --- Botón recargar --- */
+#btnReload {
+  width: 100%;
+  border-radius: 10px;
+  margin: 1rem 0 .5rem;
+  padding: .75rem;
+  font-weight: 600;
+}
+
+/* --- Tabla de clientes --- */
+.clients-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,.05);
+}
+
+.clients-table th, .clients-table td {
+  padding: .8rem 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.clients-table th {
+  background: #0d6efd;
+  color: white;
+  text-align: left;
+  font-weight: 600;
+}
+
+.clients-table tr:hover {
+  background: #f7f9ff;
+}
+
+.clients-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- Fila clicable --- */
+.row-click { cursor: pointer; }
+.row-click:hover { background: #e9f1ff; }
+
+/* --- Responsive --- */
+@media (max-width: 800px) {
+  #formAdd {
+    grid-template-columns: 1fr;
+  }
+  #btnReload {
+    font-size: .95rem;
+  }
+  .clients-table th, .clients-table td {
+    font-size: .9rem;
+    padding: .6rem .75rem;
+  }
+}
+
+
+/* === ÓRDENES (filtros + tabla) === */
+.orders-section {            /* si quieres, da esta clase al <section> */
+  padding: 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.orders-section h1 {
+  font-size: 1.8rem;
+  margin-bottom: .75rem;
+}
+
+/* ---- Tarjeta de filtros ---- */
+#filters {
+  display: grid;                        /* asegura el grid aunque venga inline */
+  grid-template-columns: repeat(6, minmax(0,1fr));
+  gap: .6rem;
+}
+
+#filters label {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  font-size: .9rem;
+  color: #555;
+}
+
+#filters input,
+#filters select {
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: .65rem .8rem;
+  font-size: .95rem;
+  transition: border .2s, box-shadow .2s;
+  background: #fff;
+}
+
+#filters input:focus,
+#filters select:focus {
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 3px rgba(13,110,253,.12);
+  outline: none;
+}
+
+/* contenedor de botones (el <div> dentro del form) */
+#filters > div {
+  display: flex !important;
+  align-items: flex-end;
+  gap: .5rem;
+}
+
+#filters button {
+  border-radius: 10px;
+  padding: .7rem .95rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .2s ease, background .2s;
+}
+
+/* Aplicar */
+#btnApply {
+  background: #0d6efd;
+  color: #fff;
+}
+#btnApply:hover { transform: translateY(-1px); box-shadow: 0 8px 15px -10px rgba(13,110,253,.45); }
+
+/* Limpiar (estilo ghost) */
+#btnClear {
+  background: #eef2f7;
+  color: #374151;
+}
+#btnClear:hover { background: #e6ebf2; }
+
+/* Exportar CSV (ya tiene .cta pero por si acaso) */
+#btnCsv {
+  background: #0d6efd;
+  color: #fff;
+}
+
+/* Mensajito debajo del filtro */
+#msg.muted {
+  margin-top: .25rem;
+  color: #6b7280;
+}
+
+/* ---- Tabla ---- */
+.clients-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(0,0,0,.05);
+}
+
+.clients-table th,
+.clients-table td {
+  padding: .8rem 1rem;
+  border-bottom: 1px solid #eee;
+  vertical-align: middle;
+}
+
+.clients-table th {
+  background: #0d6efd;
+  color: #fff;
+  text-align: left;
+  font-weight: 600;
+}
+
+/* zebra + hover sutil */
+.clients-table tbody tr:nth-child(even) { background: #fafbff; }
+.clients-table tbody tr:hover { background: #f3f7ff; }
+
+/* botón "Abrir" dentro de la tabla */
+.clients-table tbody button {
+  padding: .5rem 1rem;
+  border-radius: 10px;
+  background: #0d6efd;
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+.clients-table tbody button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 15px -10px rgba(13,110,253,.45);
+}
+
+/* selector de estatus dentro de la tabla */
+.clients-table select.status {
+  min-width: 150px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: .45rem .6rem;
+  background: #fff;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1000px) {
+  #filters {
+    grid-template-columns: repeat(3, minmax(0,1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  #filters {
+    grid-template-columns: 1fr;
+  }
+  #filters > div {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+  #filters button { width: 100%; }
+  .clients-table th, .clients-table td {
+    font-size: .9rem;
+    padding: .6rem .75rem;
+  }
+  .clients-table select.status { min-width: 0; width: 100%; }
+}
+
+
+
+/* ===== Base accesibilidad ===== */
+.skip-link {
+  position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden;
+}
+.skip-link:focus {
+  position:fixed; left:1rem; top:1rem; width:auto; height:auto; padding:.5rem .75rem;
+  background:#0d6efd; color:#fff; border-radius:.5rem; z-index:9999;
+}
+
+/* ===== Topbar mejorada + sticky ===== */
+.topbar--sticky { position: sticky; top: 0; z-index: 50; background: #fff; }
+.topbar__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: .65rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.topbar { border-bottom: 1px solid #eee; box-shadow: 0 4px 14px -12px rgba(0,0,0,.25); }
+.brand { display:flex; align-items:center; gap:.5rem; text-decoration:none; color:inherit; }
+
+.logo { height: 32px; display:block; }
+
+/* ===== Navegación ===== */
+.mainnav {
+  margin-left: auto;
+  display: flex;
+  gap: .75rem;
+}
+.mainnav a {
+  text-decoration: none;
+  color: #333;
+  padding: .5rem .7rem;
+  border-radius: .6rem;
+}
+.mainnav a:hover { background: #f2f6ff; }
+.mainnav a.active {
+  background: #0d6efd; color: #fff;
+  box-shadow: 0 8px 16px -10px rgba(13,110,253,.6);
+}
+  
+/* ===== Menú móvil ===== */
+.nav-toggle {
+  display: none;
+  margin-left: auto;
+  font-size: 1.15rem;
+  background: #0d6efd; color: #fff;
+  border: none; border-radius: .6rem;
+  padding: .45rem .6rem; cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .topbar__inner { gap:.5rem; }
+  .nav-toggle { display: inline-flex; }
+  .mainnav {
+    position: absolute; right: 1rem; top: 58px;
+    background: #fff;
+    border: 1px solid #eee; border-radius: 12px;
+    box-shadow: 0 18px 28px -14px rgba(0,0,0,.20);
+    padding: .4rem;
+    display: none;               /* cerrado por defecto */
+    flex-direction: column;
+    min-width: 180px;
+  }
+  .mainnav.open { display: flex; }
+  .mainnav a { padding: .6rem .75rem; }
+}
+
+/* Opcional: suavizar el main al usar topbar sticky */
+main#app { padding-top: 1rem; }

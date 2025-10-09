@@ -1,4 +1,3 @@
-// src/views/orders.view.js
 import { db, fx } from '../firebase.js';
 import { logAction } from '../logging.js';
 
@@ -14,7 +13,9 @@ function fmtDate(any) {
 const STATUSES = ['En revisión', 'Abierta', 'En proceso', 'Finalizada', 'Entregada'];
 
 export default function OrdersView() {
+  // ✅ añadimos clase general para estilos CSS modernos
   const el = document.createElement('section');
+  el.className = 'orders-section';
   el.innerHTML = `
     <h1>Órdenes</h1>
 
@@ -131,7 +132,7 @@ export default function OrdersView() {
     // guardar en memoria para exportación
     lastRendered = filtered;
 
-    // abrir
+    // abrir detalle
     body.querySelectorAll('[data-open]').forEach(b => {
       b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
     });
@@ -168,7 +169,6 @@ export default function OrdersView() {
     if (status) wh.push(fx.where('status', '==', status));
 
     let q = fx.query(base, ...wh);
-
     const withOrder = (...conds) => fx.query(base, ...wh, ...conds);
 
     async function tryIndexed() {
@@ -237,7 +237,6 @@ export default function OrdersView() {
       o.__id
     ]));
 
-    // CSV seguro (escapando comillas)
     const escape = (s) => `"${String(s).replaceAll('"','""')}"`;
     const csv = [headers, ...rows].map(r => r.map(escape).join(',')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

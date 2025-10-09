@@ -3,28 +3,53 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0d6efd" />
   <title>EVRepairs — Gestión</title>
   <link href="./assets/styles.css" rel="stylesheet" />
 </head>
 <body>
-  <header class="topbar">
-    <img src="assets/logocompl.PNG" alt="EVRepairs" class="logo" />
-    <nav>
-      <a href="#/dashboard">Dashboard</a>
-      <a href="#/clients">Clientes</a>
-      <a href="#/orders">Órdenes</a>
-      <a href="#/history">Historial</a>
-      <a href="#/login">Salir</a>
+  <!-- Accesibilidad: ir al contenido -->
+  <a href="#app" class="skip-link">Saltar al contenido</a>
 
-    </nav>
+  <header class="topbar topbar--sticky">
+    <div class="topbar__inner">
+      <a href="#/dashboard" class="brand">
+        <img src="assets/logocompl.PNG" alt="EVRepairs" class="logo" />
+      </a>
+
+      <!-- Toggle menú móvil -->
+      <button class="nav-toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false">
+        ☰
+      </button>
+
+      <nav class="mainnav" id="mainnav" aria-label="Navegación principal">
+        <a href="#/dashboard" data-route="#/dashboard">Dashboard</a>
+        <a href="#/clients"   data-route="#/clients">Clientes</a>
+        <a href="#/orders"    data-route="#/orders">Órdenes</a>
+        <a href="#/history"   data-route="#/history">Historial</a>
+        <a href="#/login"     data-route="#/login">Salir</a>
+      </nav>
+    </div>
   </header>
 
-  <!-- 🔴 Este contenedor es OBLIGATORIO -->
+  <!-- Contenido -->
   <main id="app"></main>
 
   <footer class="footer">EVRepairs © 2025</footer>
 
-  <!-- Coloca el script al final del body -->
+  <!-- App -->
   <script type="module" src="/src/main.js"></script>
+
+  <!-- Toggle del menú móvil (ultraligero) -->
+  <script>
+    const navBtn = document.getElementById('navToggle');
+    const nav    = document.getElementById('mainnav');
+    if (navBtn && nav) {
+      navBtn.addEventListener('click', () => {
+        const open = nav.classList.toggle('open');
+        navBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+    }
+  </script>
 </body>
 </html>
