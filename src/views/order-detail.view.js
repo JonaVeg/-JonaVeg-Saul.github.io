@@ -12,7 +12,7 @@ function genFolio() {
 }
 
 // 👉 técnicos por defecto (por si la colección está vacía)
-const DEFAULT_TECHS = ['Víctor', 'Saúl'];
+const DEFAULT_TECHS = ['Víctor Juarez ', 'Saúl Huerta ', 'Eduardo Reyes '];
 
 export function renderOrderDetail(orderId = null, clientId = null, equipmentId = null) {
   console.log('[ORDER DETAIL] open', { orderId, clientId, equipmentId });
