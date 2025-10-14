@@ -30,12 +30,22 @@ export default async function OrderPrintView() {
       return;
     }
     const o = oSnap.data();
-    const [cSnap, eSnap] = await Promise.all([
-      fx.getDoc(fx.doc(db, 'clients', o.clientId)),
-      fx.getDoc(fx.doc(db, 'equipments', o.equipmentId)),
-    ]);
-    const c = cSnap.data() || {};
-    const e = eSnap.data() || {};
+
+    // Traemos cliente/equipo; si no existen, caemos a los snapshots
+    let c = {};
+    let e = {};
+    try {
+      if (o.clientId) {
+        const cSnap = await fx.getDoc(fx.doc(db, 'clients', o.clientId));
+        if (cSnap.exists()) c = cSnap.data();
+      }
+    } catch {}
+    try {
+      if (o.equipmentId) {
+        const eSnap = await fx.getDoc(fx.doc(db, 'equipments', o.equipmentId));
+        if (eSnap.exists()) e = eSnap.data();
+      }
+    } catch {}
 
     const parts       = o?.quote?.parts || [];
     const consumables = o?.quote?.consumables || [];
@@ -43,22 +53,6 @@ export default async function OrderPrintView() {
     const t           = o?.quote?.totals || {};
     const rate        = o?.quote?.exchangeRate?.usdToMxn;
 
-    const rows = (arr, isLabor=false) => arr.map(x=>`
-      <tr>
-        <td>${x.description||''}</td>
-        ${isLabor ? `
-          <td>${x.hours||0}</td>
-          <td>${x.ratePerHour||0}</td>
-        ` : `
-          <td>${x.partNumber||''}</td>
-          <td>${x.qty||0}</td>
-          <td>${x.unitPrice||0}</td>
-        `}
-        <td>${x.currency||'MXN'}</td>
-      </tr>
-    `).join('');
-
-    // ===== Estilos específicos de impresión (con logo) =====
     const style = document.createElement('style');
     style.textContent = `
       @media print {.topbar, .no-print{ display:none !important; }}
@@ -76,32 +70,26 @@ export default async function OrderPrintView() {
       .btn{padding:.45rem .8rem;border-radius:8px;border:1px solid #d0d0d0;background:#fff;cursor:pointer}
       .btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
 
-      /* Encabezado con logo */
       .print-header{
         display:flex; align-items:center; gap:16px; margin-bottom:8px;
         border-bottom:2px solid #e5e7eb; padding-bottom:8px;
       }
-      .brand-logo{
-        width:6.5cm; max-height:3.8cm; object-fit:contain; display:block;
-      }
+      .brand-logo{ width:6.5cm; max-height:3.8cm; object-fit:contain; display:block; }
       .brand-meta{display:flex; flex-direction:column; gap:4px}
       .brand-title{font-size:22px; font-weight:800; letter-spacing:.2px}
       .brand-sub{font-size:12px; color:#444}
       .brand-sub a{color:#444; text-decoration:none}
 
-      /* Fotos */
       .photos{display:grid; grid-template-columns:repeat(2,1fr); gap:8px}
       .photos .group{border:1px solid #e5e7eb; border-radius:8px; padding:8px}
       .photos h4{margin:0 0 6px 0}
       .photos-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px}
       .photos-grid img{width:100%; height:3.6cm; object-fit:cover; border:1px solid #e5e7eb; border-radius:6px}
 
-      /* Márgenes de página Carta */
       @page{ size: Letter; margin: 12mm; }
     `;
     document.head.appendChild(style);
 
-    // ===== Cargar fotos desde RTDB si existen =====
     async function loadPhotoUrls(group) {
       try {
         if (!group?.path) return [];
@@ -120,28 +108,32 @@ export default async function OrderPrintView() {
         <div class="photos">
           <div class="group">
             <h4>Antes</h4>
-            <div class="photos-grid">
-              ${beforeUrls.map(u => `<img src="${u}" alt="Antes">`).join('')}
-            </div>
+            <div class="photos-grid">${beforeUrls.map(u => `<img src="${u}" alt="Antes">`).join('')}</div>
           </div>
           <div class="group">
             <h4>Después</h4>
-            <div class="photos-grid">
-              ${afterUrls.map(u => `<img src="${u}" alt="Después">`).join('')}
-            </div>
+            <div class="photos-grid">${afterUrls.map(u => `<img src="${u}" alt="Después">`).join('')}</div>
           </div>
         </div>
       </div>
     ` : '';
 
-    // ===== Render =====
+    // Fallbacks de cliente/equipo si no se pudieron leer los docs
+    const clientName = c?.name || o?.clientNameSnapshot || '(sin cliente)';
+    const clientContact = [(c?.email || ''), (c?.phone || '')].filter(Boolean).join(' • ') ||
+                          (o?.clientNameSnapshot ? '' : '');
+    const clientAddress = c?.address || '';
+
+    const eqLabel = (e?.brand || '') + (e?.model ? (' ' + e.model) : '');
+    const equipmentName = eqLabel.trim() || o?.equipmentSnapshot || '(sin equipo)';
+    const equipmentSerial = e?.serial || '';
+
     el.innerHTML = `
       <div class="toolbar no-print">
         <button class="btn" id="btnBack">← Volver</button>
         <button class="btn primary" id="btnPrintNow">Imprimir</button>
       </div>
 
-      <!-- Encabezado con logo + datos -->
       <header class="print-header">
         <img class="brand-logo" src="assets/Blancologo.png" alt="Logo EVRepairs">
         <div class="brand-meta">
@@ -159,15 +151,15 @@ export default async function OrderPrintView() {
             <div><b>Folio:</b> ${o?.folio || id}</div>
             <div><b>Estatus:</b> ${o?.status || '-'}</div>
             <div><b>Fecha:</b> ${fmtDate(o?.date || o?.createdAt)}</div>
-            <div><b>Técnico:</b> ${o?.technicianName || 'EVRepairs — siempre comprometidos'}</div>
+            ${o?.technicianName ? `<div><b>Técnico:</b> ${o.technicianName}</div>` : ''}
           </div>
         </div>
         <div class="card">
           <h3>Cliente</h3>
           <div class="small">
-            <div><b>Nombre:</b> ${c?.name || '-'}</div>
-            <div><b>Contacto:</b> ${c?.email || '-'} • ${c?.phone || '-'}</div>
-            <div><b>Dirección:</b> ${c?.address || '-'}</div>
+            <div><b>Nombre:</b> ${clientName}</div>
+            <div><b>Contacto:</b> ${clientContact || '-'}</div>
+            <div><b>Dirección:</b> ${clientAddress || '-'}</div>
           </div>
         </div>
       </div>
@@ -175,8 +167,8 @@ export default async function OrderPrintView() {
       <div class="card">
         <h3>Equipo</h3>
         <div class="small">
-          <div><b>Serie:</b> ${e?.serial || '-'}</div>
-          <div><b>Marca/Modelo:</b> ${e?.brand || ''} ${e?.model || ''}</div>
+          <div><b>Equipo:</b> ${equipmentName}</div>
+          <div><b>Serie:</b> ${equipmentSerial || '-'}</div>
         </div>
       </div>
 
@@ -194,19 +186,39 @@ export default async function OrderPrintView() {
         <h4>Refacciones</h4>
         <table>
           <thead><tr><th>Descripción</th><th>SKU</th><th>Cant.</th><th>P. Unit</th><th>Moneda</th></tr></thead>
-          <tbody>${rows(parts)}</tbody>
+          <tbody>${parts.map(x=>`
+            <tr>
+              <td>${x.description||''}</td>
+              <td>${x.partNumber||''}</td>
+              <td>${x.qty||0}</td>
+              <td>${x.unitPrice||0}</td>
+              <td>${x.currency||'MXN'}</td>
+            </tr>`).join('')}</tbody>
         </table>
 
         <h4>Consumibles</h4>
         <table>
           <thead><tr><th>Descripción</th><th>SKU</th><th>Cant.</th><th>P. Unit</th><th>Moneda</th></tr></thead>
-          <tbody>${rows(consumables)}</tbody>
+          <tbody>${consumables.map(x=>`
+            <tr>
+              <td>${x.description||''}</td>
+              <td>${x.partNumber||''}</td>
+              <td>${x.qty||0}</td>
+              <td>${x.unitPrice||0}</td>
+              <td>${x.currency||'MXN'}</td>
+            </tr>`).join('')}</tbody>
         </table>
 
         <h4>Mano de obra</h4>
         <table>
           <thead><tr><th>Descripción</th><th>Horas</th><th>Tarifa</th><th>Moneda</th></tr></thead>
-          <tbody>${rows(labor,true)}</tbody>
+          <tbody>${labor.map(x=>`
+            <tr>
+              <td>${x.description||''}</td>
+              <td>${x.hours||0}</td>
+              <td>${x.ratePerHour||0}</td>
+              <td>${x.currency||'MXN'}</td>
+            </tr>`).join('')}</tbody>
         </table>
 
         <table class="totals">
@@ -223,20 +235,17 @@ export default async function OrderPrintView() {
 
       ${photosHTML}
 
+      <div class="small muted">Generado: ${new Date().toLocaleString()}</div>
+
       <div class="small" style="margin-top:8px">
         <b>Términos y condiciones</b><br/>
-        El diagnóstico y la cotización son estimaciones basadas en la revisión del equipo. Los tiempos y costos pueden ajustarse si se detectan fallas adicionales. 
+        El diagnóstico y la cotización son estimaciones basadas en la revisión del equipo. Los tiempos y costos pueden ajustarse si se detectan fallas adicionales.
         EVRepairs no se hace responsable por pérdida de datos; se recomienda realizar respaldo previo. Al autorizar la reparación, el cliente acepta estos términos.
       </div>
-
-      <div class="small muted" style="margin-top:8px">Generado: ${new Date().toLocaleString()}</div>
     `;
 
-    // Acciones
     el.querySelector('#btnBack').addEventListener('click', () => history.back());
     el.querySelector('#btnPrintNow').addEventListener('click', () => window.print());
-
-    // Mantener comportamiento actual (auto-print)
     setTimeout(() => window.print(), 300);
   } catch (err) {
     console.error('[PRINT VIEW] error', err);

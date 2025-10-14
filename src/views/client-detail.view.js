@@ -55,7 +55,6 @@ export function renderClientDetail(clientId) {
     return '-';
   };
 
-  // Cargar datos del cliente
   (async () => {
     const cSnap = await fx.getDoc(fx.doc(db, 'clients', clientId));
     const c = cSnap.data();
@@ -65,9 +64,7 @@ export function renderClientDetail(clientId) {
       <small>${c?.address ?? ''}</small>
     `;
 
-    // -------- Equipos
     async function loadEquipments() {
-      console.log('[EQUIPMENTS] load for client', clientId);
       eqBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">Cargando...</td></tr>`;
       try {
         const q = fx.query(fx.collection(db, 'equipments'), fx.where('clientId', '==', clientId));
@@ -77,8 +74,8 @@ export function renderClientDetail(clientId) {
           const e = d.data();
           rows.push(`
             <tr>
-              <td>${e.serial}</td>
-              <td>${e.brand ?? ''} ${e.model ?? ''}</td>
+              <td>${e.serial || '-'}</td>
+              <td>${(e.brand || '') + (e.model ? ' ' + e.model : '')}</td>
               <td><button data-new-ost="${d.id}" class="cta">Nueva OST</button></td>
             </tr>
           `);
@@ -86,31 +83,26 @@ export function renderClientDetail(clientId) {
         eqBody.innerHTML = rows.length ? rows.join('') :
           `<tr><td colspan="3" style="text-align:center;color:#888;">Sin equipos</td></tr>`;
 
-        // Botones "Nueva OST" por equipo
         eqBody.querySelectorAll('[data-new-ost]').forEach(btn => {
           btn.addEventListener('click', () => {
             const equipmentId = btn.getAttribute('data-new-ost');
             window.renderOrderDetail(null, clientId, equipmentId);
           });
         });
-        console.log('[EQUIPMENTS] loaded rows:', rows.length);
       } catch (err) {
         console.error('[EQUIPMENTS] load error', err);
         eqBody.innerHTML = `<tr><td colspan="3" style="color:#d00;">Error al cargar equipos</td></tr>`;
       }
     }
 
-    // -------- Órdenes del cliente (con fallback si falta índice o permisos)
     async function loadOrders() {
-      console.log('[ORDERS] load for client', clientId);
       ordBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Cargando...</td></tr>`;
-
       const baseQuery = fx.query(
         fx.collection(db, 'orders'),
         fx.where('clientId', '==', clientId)
       );
 
-      const renderFromSnap = (snap, note='') => {
+      const renderFromSnap = (snap) => {
         const rows = [];
         snap.forEach(d => {
           const o = d.data();
@@ -119,7 +111,7 @@ export function renderClientDetail(clientId) {
             <tr>
               <td>${o.folio || '-'}</td>
               <td>${o.status || '-'}</td>
-              <td>${o.equipmentId || '-'}</td>
+              <td>${o.equipmentSnapshot || o.equipmentId || '-'}</td>
               <td>${fmtDate(when)}</td>
               <td><button data-open="${d.id}">Abrir</button></td>
             </tr>
@@ -130,10 +122,9 @@ export function renderClientDetail(clientId) {
         ordBody.querySelectorAll('[data-open]').forEach(b => {
           b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
         });
-        console.log(`[ORDERS] rendered rows ${note}:`, rows.length);
       };
 
-      const renderFromArray = (arr, note='fallback') => {
+      const renderFromArray = (arr) => {
         arr.sort((a,b) => {
           const as = a.createdAt?.seconds ?? (a.date?.seconds ?? 0);
           const bs = b.createdAt?.seconds ?? (b.date?.seconds ?? 0);
@@ -143,7 +134,7 @@ export function renderClientDetail(clientId) {
           <tr>
             <td>${o.folio || '-'}</td>
             <td>${o.status || '-'}</td>
-            <td>${o.equipmentId || '-'}</td>
+            <td>${o.equipmentSnapshot || o.equipmentId || '-'}</td>
             <td>${fmtDate(o.createdAt || o.date)}</td>
             <td><button data-open="${o.__id}">Abrir</button></td>
           </tr>
@@ -153,25 +144,18 @@ export function renderClientDetail(clientId) {
         ordBody.querySelectorAll('[data-open]').forEach(b => {
           b.addEventListener('click', () => window.renderOrderDetail(b.getAttribute('data-open')));
         });
-        console.log(`[ORDERS] rendered rows (${note}):`, rows.length);
       };
 
       try {
-        // Camino rápido: requiere índice
         const q = fx.query(baseQuery, fx.orderBy('createdAt', 'desc'));
         const snap = await fx.getDocs(q);
-        console.log('[ORDERS] indexed query ok, count =', snap.size);
-        renderFromSnap(snap, 'indexed');
+        renderFromSnap(snap);
       } catch (err) {
-        console.warn('[ORDERS] indexed query failed → fallback', err?.code, err?.message);
-
-        // Si es permisos, mostramos mensaje claro y no seguimos
+        console.warn('[ORDERS] indexed query failed → fallback', err?.code);
         if (err?.code === 'permission-denied') {
-          ordBody.innerHTML = `<tr><td colspan="5" style="color:#d00;">Sin permisos para leer órdenes. Revisa Reglas de Firestore.</td></tr>`;
+          ordBody.innerHTML = `<tr><td colspan="5" style="color:#d00;">Sin permisos para leer órdenes.</td></tr>`;
           return;
         }
-
-        // Fallback: sin orderBy, ordenamos en memoria
         try {
           const snap = await fx.getDocs(baseQuery);
           const arr = [];
@@ -184,15 +168,15 @@ export function renderClientDetail(clientId) {
       }
     }
 
-    // Guardar equipo nuevo
+    // Guardar equipo nuevo (arreglo: serial se define antes de usar)
     formEq.addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(formEq);
+      const serial = fd.get('serial')?.toString().trim();
       const payload = {
         clientId,
         serial,
-        serialUpper: serial?.toUpperCase() || '',
-        serial: fd.get('serial')?.toString().trim(),
+        serialUpper: (serial || '').toUpperCase(),
         brand: fd.get('brand')?.toString().trim() || '',
         model: fd.get('model')?.toString().trim() || '',
         createdAt: fx.serverTimestamp()
@@ -208,18 +192,14 @@ export function renderClientDetail(clientId) {
         console.error('[EQUIPMENTS] create error', err);
         eqMsg.textContent = '✖ Error al guardar';
       }
-      
     });
 
-    // Botón Nueva OST general
     btnNewOrder.addEventListener('click', () => {
       window.renderOrderDetail(null, clientId, null);
     });
 
-    // Botón recargar órdenes
     btnReload.addEventListener('click', () => loadOrders());
 
-    // Inicializar
     await Promise.all([loadEquipments(), loadOrders()]);
   })();
 }

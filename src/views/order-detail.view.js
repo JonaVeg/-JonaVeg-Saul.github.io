@@ -11,8 +11,8 @@ function genFolio() {
   return `OST-${y}${m}-${r}`;
 }
 
-// 👉 técnicos por defecto (por si la colección está vacía)
-const DEFAULT_TECHS = ['Víctor Juarez ', 'Saúl Huerta ', 'Eduardo Reyes '];
+// Técnicos por defecto (fallback UI si la colección está vacía)
+const DEFAULT_TECHS = ['Víctor Juarez', 'Saúl Huerta', 'Eduardo Reyes'];
 
 export function renderOrderDetail(orderId = null, clientId = null, equipmentId = null) {
   console.log('[ORDER DETAIL] open', { orderId, clientId, equipmentId });
@@ -25,7 +25,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     <h2>${isNew ? 'Nueva OST' : 'Editar OST'}</h2>
 
     <form id="form" class="card">
-      <div class="grid">
+      <div class="grid" style="grid-template-columns: repeat(3,minmax(0,1fr)); gap:.6rem;">
         <label>Folio <input name="folio" required value="${genFolio()}"/></label>
         <label>Fecha <input type="date" name="date" required /></label>
         <label>Estatus
@@ -37,10 +37,24 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
             <option>Entregada</option>
           </select>
         </label>
-        <label>ClienteId <input name="clientId" required value="${clientId ?? ''}"/></label>
-        <label>EquipoId  <input name="equipmentId" required value="${equipmentId ?? ''}"/></label>
 
-        <!-- 👉 Select de técnico (opción única) -->
+        <!-- Cliente con buscador -->
+        <label class="combo">
+          <span>Cliente</span>
+          <input id="clientSearch" type="text" placeholder="Buscar cliente..." autocomplete="off" />
+          <input id="clientId" name="clientId" type="hidden" />
+          <div id="clientList" class="listbox" hidden></div>
+        </label>
+
+        <!-- Equipo del cliente -->
+        <label>
+          <span>Equipo</span>
+          <select id="equipmentSelect" name="equipmentId" disabled>
+            <option value="">(Sin equipos para este cliente)</option>
+          </select>
+        </label>
+
+        <!-- Técnico (opción única) -->
         <label>Técnico
           <select name="technicianId" id="technicianId">
             <option value="">Selecciona un técnico...</option>
@@ -67,7 +81,10 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
           <label>Tipo de cambio USD→MXN
             <input type="number" step="0.0001" name="usdToMxn" value="18.20" />
           </label>
-          <label>IVA (%) <input type="number" step="0.01" name="taxRate" value="16" /></label>
+          <!-- 🔁 IVA (%) → Descuento (%) -->
+          <label>Descuento (%)
+            <input type="number" step="0.01" name="discountRate" value="0" />
+          </label>
         </div>
 
         <h4>Refacciones</h4>
@@ -92,62 +109,201 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
   `;
   app.replaceChildren(el);
 
-  const form = el.querySelector('#form');
-  const msg = el.querySelector('#msg');
-  const totalsBox = el.querySelector('#totals');
-  const photosSavedBox = el.querySelector('#photosSaved');
-  const techSelect = el.querySelector('#technicianId');
+  const form            = el.querySelector('#form');
+  const msg             = el.querySelector('#msg');
+  const totalsBox       = el.querySelector('#totals');
+  const photosSavedBox  = el.querySelector('#photosSaved');
+  const techSelect      = el.querySelector('#technicianId');
+  const searchInput     = el.querySelector('#clientSearch');
+  const hiddenClientId  = el.querySelector('#clientId');
+  const resultsList     = el.querySelector('#clientList');
+  const equipmentSelect = el.querySelector('#equipmentSelect');
 
-  // ====== Técnicos: siembra + carga (sin fx.limit) ======
-  async function ensureDefaultTechnicians() {
-    try {
-      const snap = await fx.getDocs(fx.collection(db, 'technicians'));
-      if (!snap.empty) return;
-
-      await Promise.all(
-        DEFAULT_TECHS.map(name =>
-          fx.addDoc(fx.collection(db, 'technicians'), {
-            name, active: true, createdAt: fx.serverTimestamp(),
-          })
-        )
-      );
-    } catch (e) {
-      console.warn('[TECH] ensure default technicians failed:', e);
-    }
-  }
-
+  // =========================
+  //  Técnicos
+  // =========================
   async function loadTechnicians(preselectId = '') {
-    const techSelect = document.getElementById('technicianId');
-    techSelect.innerHTML = `<option value="">Cargando técnicos...</option>`;
-
-    await ensureDefaultTechnicians();
-
-    let docs = [];
+    const sel = techSelect;
+    sel.innerHTML = `<option value="">Cargando técnicos...</option>`;
     try {
       const snap = await fx.getDocs(fx.collection(db, 'technicians'));
+      const docs = [];
       snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+      const rows = docs
+        .filter(t => t.active !== false)
+        .sort((a,b) => String(a.name||'').localeCompare(String(b.name||'')));
+      sel.innerHTML =
+        `<option value="">Selecciona un técnico...</option>` +
+        (rows.length
+          ? rows.map(t => `<option value="${t.id}">${t.name || t.id}</option>`).join('')
+          : DEFAULT_TECHS.map(n => `<option value="${n}">${n}</option>`).join(''));
     } catch (e) {
       console.warn('[TECH] load error:', e);
-      // Fallback UI sin Firestore
-      techSelect.innerHTML =
+      sel.innerHTML =
         `<option value="">Selecciona un técnico...</option>` +
         DEFAULT_TECHS.map(n => `<option value="${n}">${n}</option>`).join('');
-      if (preselectId) techSelect.value = preselectId;
-      return;
     }
-
-    docs = docs
-      .filter(t => t.active !== false)
-      .sort((a,b) => String(a.name||'').localeCompare(String(b.name||'')));
-
-    techSelect.innerHTML =
-      `<option value="">Selecciona un técnico...</option>` +
-      docs.map(t => `<option value="${t.id}">${t.name || t.id}</option>`).join('');
-
-    if (preselectId) techSelect.value = preselectId;
+    if (preselectId) sel.value = preselectId;
   }
 
-  // ===== Helpers cotizador =====
+  // =========================
+  //  Clientes + Equipos (buscador)
+  // =========================
+  let allClients = [];
+  let listIndex = -1;
+  const lower = s => (s||'').toString().toLowerCase();
+
+  function rowHTML(c) {
+    const sub = [c.email, c.phone].filter(Boolean).join(' • ');
+    return `
+      <div class="item" data-id="${c.id}" role="option">
+        <div class="title">${c.name || '(Sin nombre)'}</div>
+        ${sub ? `<div class="sub">${sub}</div>` : ''}
+      </div>`;
+  }
+
+  function paintList(q='') {
+    const needle = lower(q);
+    const rows = allClients.filter(c =>
+      (lower(c.name)+' '+lower(c.email)+' '+lower(c.phone)).includes(needle)
+    );
+    resultsList.innerHTML = rows.length ? rows.map(rowHTML).join('') : `<div class="empty">Sin coincidencias</div>`;
+    resultsList.hidden = false;
+    listIndex = -1;
+  }
+  function closeList(){ resultsList.hidden = true; listIndex = -1; }
+
+  function chooseClientByElement(elm) {
+    const id = elm?.getAttribute('data-id');
+    const c  = allClients.find(x => x.id === id);
+    if (!c) return;
+    hiddenClientId.value = c.id;
+    const sub = [c.email, c.phone].filter(Boolean).join(' • ');
+    searchInput.value = `${c.name}${sub ? ' — '+sub : ''}`;
+    closeList();
+    equipmentSelect.disabled = false;
+    loadEquipments(c.id);
+  }
+  function chooseClientByIndex(){
+    if (resultsList.hidden) return;
+    const items = resultsList.querySelectorAll('.item');
+    if (!items.length) return;
+    if (listIndex<0 || listIndex>=items.length) return;
+    chooseClientByElement(items[listIndex]);
+  }
+  function highlight(delta){
+    if (resultsList.hidden) return;
+    const items = resultsList.querySelectorAll('.item');
+    if (!items.length) return;
+    resultsList.querySelectorAll('.item.active').forEach(n => n.classList.remove('active'));
+    listIndex = Math.max(0, Math.min(items.length-1, listIndex + delta));
+    items[listIndex].classList.add('active');
+    items[listIndex].scrollIntoView({block:'nearest'});
+  }
+
+  async function loadClients(preselectId = '', preselectName = '') {
+    // listeners solo una vez
+    if (!searchInput.__wired) {
+      searchInput.__wired = true;
+      searchInput.addEventListener('input',  () => paintList(searchInput.value));
+      searchInput.addEventListener('focus',  () => paintList(searchInput.value));
+      searchInput.addEventListener('blur',   () => setTimeout(closeList, 120));
+      searchInput.addEventListener('keydown', ev => {
+        if (ev.key==='ArrowDown'){ ev.preventDefault(); highlight(1); }
+        if (ev.key==='ArrowUp'){   ev.preventDefault(); highlight(-1); }
+        if (ev.key==='Enter'){     ev.preventDefault(); chooseClientByIndex(); }
+        if (ev.key==='Escape'){    ev.preventDefault(); closeList(); }
+      });
+      resultsList.addEventListener('mousedown', (ev) => {
+        const item = ev.target.closest('.item');
+        if (item){ ev.preventDefault(); chooseClientByElement(item); }
+      });
+    }
+
+    // lee clientes
+    try{
+      const snap = await fx.getDocs(fx.collection(db,'clients'));
+      allClients = [];
+      snap.forEach(d=>{
+        const c = d.data();
+        allClients.push({
+          id:d.id,
+          name: c.name||'(Sin nombre)',
+          email:c.email||'',
+          phone:c.phone||'',
+          address:c.address||''
+        });
+      });
+      allClients.sort((a,b)=>a.name.localeCompare(b.name));
+    }catch(e){
+      console.error('[CLIENTS] load error', e);
+      allClients = [];
+    }
+
+    // preselección (cuando llegas desde Cliente/Equipo)
+    if (preselectId){
+      const found = allClients.find(c=>c.id===preselectId);
+      hiddenClientId.value = preselectId;
+      if (found){
+        const sub = [found.email, found.phone].filter(Boolean).join(' • ');
+        searchInput.value = `${found.name}${sub ? ' — '+sub : ''}`;
+      }else if(preselectName){
+        searchInput.value = `${preselectName} — (no listado)`;
+      }
+      equipmentSelect.disabled = false;
+      await loadEquipments(preselectId, equipmentId || '', '');
+    }else{
+      hiddenClientId.value = '';
+      searchInput.value = '';
+      equipmentSelect.innerHTML = `<option value="">(Sin equipos para este cliente)</option>`;
+      equipmentSelect.disabled = true;
+    }
+
+    resultsList.hidden = true;
+  }
+
+  async function loadEquipments(clientId, preselectEquipmentId = '', preselectEquipmentLabel = '') {
+    const sel = equipmentSelect;
+    sel.innerHTML = `<option value="">Cargando equipos...</option>`;
+    try{
+      const q = fx.query(
+        fx.collection(db,'equipments'),
+        fx.where('clientId','==', clientId)
+      );
+      const rows = [];
+      const snap = await fx.getDocs(q);
+      snap.forEach(d=>rows.push({id:d.id,...d.data()}));
+
+      if (!rows.length){ sel.innerHTML = `<option value="">(Sin equipos para este cliente)</option>`; return; }
+
+      rows.sort((a,b)=> String(a.brand||'').localeCompare(String(b.brand||'')));
+      sel.innerHTML =
+        `<option value="">Selecciona un equipo...</option>`+
+        rows.map(eq=>{
+          const label = `${eq.brand||''} ${eq.model||''}`.trim();
+          const serie = eq.serial ? ` — ${eq.serial}` : '';
+          return `<option value="${eq.id}">${label || '(Equipo)'}${serie}</option>`;
+        }).join('');
+
+      if (preselectEquipmentId){
+        sel.value = preselectEquipmentId;
+        if (sel.value!==preselectEquipmentId && preselectEquipmentLabel){
+          const ghost = document.createElement('option');
+          ghost.value = preselectEquipmentId;
+          ghost.textContent = `${preselectEquipmentLabel} — (no listado)`;
+          sel.appendChild(ghost);
+          sel.value = preselectEquipmentId;
+        }
+      }
+    }catch(e){
+      console.error('[EQUIPMENTS] load error', e);
+      sel.innerHTML = `<option value="">(Error al cargar equipos)</option>`;
+    }
+  }
+
+  // =========================
+  //  Cotizador
+  // =========================
   const addRow = (type) => {
     const wrap = el.querySelector(`[data-list="${type}"]`);
     const row = document.createElement('div');
@@ -171,9 +327,9 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     row.querySelector('[data-remove]').onclick = () => { row.remove(); computeTotals(); };
     wrap.appendChild(row);
   };
-  el.querySelector('[data-add="parts"]').onclick = () => { addRow('parts'); computeTotals(); };
-  el.querySelector('[data-add="consumables"]').onclick = () => { addRow('consumables'); computeTotals(); };
-  el.querySelector('[data-add="labor"]').onclick = () => { addRow('labor'); computeTotals(); };
+  el.querySelector('[data-add="parts"]').onclick        = () => { addRow('parts');        computeTotals(); };
+  el.querySelector('[data-add="consumables"]').onclick  = () => { addRow('consumables');  computeTotals(); };
+  el.querySelector('[data-add="labor"]').onclick        = () => { addRow('labor');        computeTotals(); };
 
   function grabItems() {
     const out = { parts: [], consumables: [], labor: [] };
@@ -201,74 +357,102 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     return out;
   }
 
+  // 👉 Ahora calculamos con DESCUENTO, no IVA.
+  // Usamos calcTotals con impuesto 0 y aplicamos el descuento sobre el subtotal.
   function computeTotals() {
-    const usdToMxn = parseFloat(form.usdToMxn.value || 18.2);
-    const taxRate = parseFloat(form.taxRate.value || 16) / 100;
-    const items = grabItems();
-    const totals = calcTotals(items, usdToMxn, taxRate);
-    totalsBox.innerHTML = `
-      <strong>MXN:</strong> Subtotal ${totals.mx.subtotal.toFixed(2)} | IVA ${totals.mx.tax.toFixed(2)} | Total ${totals.mx.total.toFixed(2)}<br/>
-      <strong>USD:</strong> Subtotal ${totals.us.subtotal.toFixed(2)} | Tax ${totals.us.tax.toFixed(2)} | Total ${totals.us.total.toFixed(2)}
-    `;
-    return { items, totals, usdToMxn, taxRate };
-  }
+  ensureQuoteStyles();
+
+  const usdToMxn     = parseFloat(form.usdToMxn.value || 18.2);
+  const discountRate = parseFloat(form.discountRate?.value || 0) / 100;
+
+  const items      = grabItems();
+  const baseTotals = calcTotals(items, usdToMxn, 0); // sin impuestos
+
+  // Descuentos y totales
+  const discMx  = baseTotals.mx.subtotal * discountRate;
+  const discUs  = baseTotals.us.subtotal * discountRate;
+
+  const totalMx = baseTotals.mx.subtotal - discMx;
+  const totalUs = baseTotals.us.subtotal - discUs;
+
+  const pct = (discountRate * 100).toFixed(2);
+
+  totalsBox.innerHTML = `
+    <div class="quote-summary">
+      <div class="quote-card">
+        <div class="quote-hdr">MXN</div>
+        <div class="qrow"><span>Subtotal</span><strong>${money(baseTotals.mx.subtotal,'MXN')}</strong></div>
+        <div class="qrow"><span>Descuento (${pct}%)</span><strong class="qneg">-${money(discMx,'MXN')}</strong></div>
+        <div class="qsep"></div>
+        <div class="qrow qtotal"><span>Total MXN</span><strong>${money(totalMx,'MXN')}</strong></div>
+      </div>
+
+      <div class="quote-card">
+        <div class="quote-hdr">USD</div>
+        <div class="qrow"><span>Subtotal</span><strong>${money(baseTotals.us.subtotal,'USD')}</strong></div>
+        <div class="qrow"><span>Discount (${pct}%)</span><strong class="qneg">-${money(discUs,'USD')}</strong></div>
+        <div class="qsep"></div>
+        <div class="qrow qtotal"><span>Total USD</span><strong>${money(totalUs,'USD')}</strong></div>
+      </div>
+    </div>
+    <div class="qmeta">TC: 1 USD = ${usdToMxn.toFixed(4)} MXN</div>
+  `;
+
+  return {
+    items,
+    usdToMxn,
+    discountRate,
+    totalsCalc: {
+      mx: { subtotal: baseTotals.mx.subtotal, discount: discMx, total: totalMx },
+      us: { subtotal: baseTotals.us.subtotal, discount: discUs, total: totalUs }
+    }
+  };
+}
+
   form.addEventListener('input', computeTotals);
 
   // ===== Fotos guardadas (RTDB) =====
   async function renderSavedPhotos(photosRTDB) {
     if (!photosRTDB) { photosSavedBox.innerHTML = ''; return; }
-
     async function renderGroup(group, title) {
       if (!group) return `<div><strong>${title}</strong><div><em>Sin fotos</em></div></div>`;
       const snap = await rfx.rGet(rfx.rRef(rtdb, group.path));
-      const val = snap.val() || {};
+      const val  = snap.val() || {};
       const imgs = Object.values(val).map(v =>
         `<img src="${v.dataUrl}" style="max-width:160px;margin:4px;border:1px solid #ddd;border-radius:6px;" />`
       ).join('');
       return `<div><strong>${title}</strong><div>${imgs || '<em>Sin fotos</em>'}</div></div>`;
     }
-
     const beforeHTML = await renderGroup(photosRTDB.before, 'Antes');
     const afterHTML  = await renderGroup(photosRTDB.after,  'Después');
     photosSavedBox.innerHTML = `<div class="card"><h4>Fotos guardadas</h4>${beforeHTML}${afterHTML}</div>`;
   }
 
-  // ===== Cargar OST si es edición =====
+  // ===== Cargar datos si es edición / o con preselección =====
   (async () => {
     let preselectTechId = '';
+    let preselectClient = clientId || '';
+    let preselectClientName = '';
+    let preselectEquip  = equipmentId || '';
+    let preselectEquipLabel = '';
+
     if (!isNew) {
       const snap = await fx.getDoc(fx.doc(db, 'orders', orderId));
       const o = snap.data();
       if (o) {
-        form.folio.value = o.folio ?? genFolio();
-        form.date.value = o.date?.toDate?.()?.toISOString?.().slice(0,10) ?? '';
-        form.status.value = o.status ?? 'En revisión';
-        form.clientId.value = o.clientId ?? '';
-        form.equipmentId.value = o.equipmentId ?? '';
-        preselectTechId = o.technicianId ?? '';
-        form.symptom.value = o.symptom ?? '';
-        form.diagnosis.value = o.diagnosis ?? '';
-        form.actions.value = o.actions ?? '';
+        form.folio.value   = o.folio ?? genFolio();
+        form.date.value    = o.date?.toDate?.()?.toISOString?.().slice(0,10) ?? '';
+        form.status.value  = o.status ?? 'En revisión';
 
-        (o.quote?.parts || []).forEach(()=>addRow('parts'));
-        (o.quote?.consumables || []).forEach(()=>addRow('consumables'));
-        (o.quote?.labor || []).forEach(()=>addRow('labor'));
-        const fill = (list, dataArr) => {
-          const rows = el.querySelectorAll(`[data-list="${list}"] .row`);
-          dataArr.forEach((it, i) => {
-            const r = rows[i];
-            if (!r) return;
-            Object.entries(it).forEach(([k,v])=>{
-              const input = r.querySelector(`[data-f="${k}"]`);
-              if (input) input.value = v;
-            });
-          });
-        };
-        fill('parts', o.quote?.parts || []);
-        fill('consumables', o.quote?.consumables || []);
-        fill('labor', o.quote?.labor || []);
-        if (o.quote?.exchangeRate?.usdToMxn) form.usdToMxn.value = o.quote.exchangeRate.usdToMxn;
-        if (o.quote?.taxRate) form.taxRate.value = o.quote.taxRate * 100;
+        preselectClient      = o.clientId ?? preselectClient;
+        preselectClientName  = o.clientNameSnapshot || '';
+        preselectEquip       = o.equipmentId ?? preselectEquip;
+        preselectEquipLabel  = o.equipmentSnapshot || '';
+
+        preselectTechId = o.technicianId ?? '';
+        form.symptom.value   = o.symptom ?? '';
+        form.diagnosis.value = o.diagnosis ?? '';
+        form.actions.value   = o.actions ?? '';
 
         await renderSavedPhotos(o.photosRTDB);
       }
@@ -276,32 +460,37 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       form.date.value = new Date().toISOString().slice(0,10);
     }
 
-    // Carga técnicos al final y preselecciona si venía en la OST
+    await loadClients(preselectClient, preselectClientName);
+    if (preselectEquip) await loadEquipments(preselectClient, preselectEquip, preselectEquipLabel);
     await loadTechnicians(preselectTechId);
 
     computeTotals();
   })();
 
-  // ===== Guardar OST + fotos (RTDB) =====
+  // ===== Guardar OST + fotos =====
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     msg.textContent = 'Guardando...';
 
-    const { items, totals, usdToMxn, taxRate } = computeTotals();
+    const chosenClientId    = hiddenClientId.value || '';
+    const chosenEquipmentId = equipmentSelect.value || '';
 
-    // 👇 Capturamos también el nombre mostrado en el select
-    const techId = techSelect.value.trim();
-    const techName =
-      techSelect.options[techSelect.selectedIndex]?.textContent?.trim() || '';
+    const chosenClient = allClients.find(c => c.id === chosenClientId);
+    const clientNameSnapshot = chosenClient ? chosenClient.name : searchInput.value || '';
+    const equipmentSnapshot  = equipmentSelect.options[equipmentSelect.selectedIndex]?.text || '';
+
+    const { items, usdToMxn, discountRate, totalsCalc } = computeTotals();
 
     const base = {
       folio: form.folio.value.trim(),
       date: fx.Timestamp.fromDate(new Date(form.date.value)),
       status: form.status.value,
-      clientId: form.clientId.value.trim(),
-      equipmentId: form.equipmentId.value.trim(),
-      technicianId: techId,
-      technicianName: techId ? techName : '',   // <-- agregado
+      clientId: chosenClientId,
+      equipmentId: chosenEquipmentId,
+      clientNameSnapshot,
+      equipmentSnapshot,
+      technicianId: techSelect.value.trim() || '',
+      technicianName: techSelect.options[techSelect.selectedIndex]?.text || '',
       symptom: form.symptom.value.trim(),
       diagnosis: form.diagnosis.value.trim(),
       actions: form.actions.value.trim(),
@@ -320,9 +509,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       const fd = new FormData(form);
 
       async function fileToDataUrlCompressed(file, maxW = 1280, quality = 0.72) {
-        if (!file || !file.type?.startsWith('image/')) {
-          throw new Error('Archivo no es una imagen válida');
-        }
+        if (!file || !file.type?.startsWith('image/')) throw new Error('Archivo no es una imagen válida');
         const dataURL = await new Promise((res, rej) => {
           const fr = new FileReader();
           fr.onload = () => res(fr.result);
@@ -365,14 +552,19 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       const upBefore = await uploadGroup('before', fd.getAll('before'));
       const upAfter  = await uploadGroup('after',  fd.getAll('after'));
 
+      // Guardamos el descuento y los totales ya descontados
       const update = {
         quote: {
           ...items,
-          taxRate,
+          discountRate, // porcentaje 0..1
           exchangeRate: { usdToMxn, setAt: fx.serverTimestamp() },
           totals: {
-            subtotalMXN: totals.mx.subtotal, taxMXN: totals.mx.tax, grandTotalMXN: totals.mx.total,
-            subtotalUSD: totals.us.subtotal, taxUSD: totals.us.tax, grandTotalUSD: totals.us.total
+            subtotalMXN: totalsCalc.mx.subtotal,
+            discountMXN: totalsCalc.mx.discount,
+            grandTotalMXN: totalsCalc.mx.total,
+            subtotalUSD: totalsCalc.us.subtotal,
+            discountUSD: totalsCalc.us.discount,
+            grandTotalUSD: totalsCalc.us.total
           }
         },
         photosRTDB: {
@@ -383,9 +575,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       };
 
       await fx.updateDoc(fx.doc(db, 'orders', orderId), update);
-
-      const action = (!base.createdAt ? 'UPDATE_OST' : 'CREATE_OST');
-      await logAction(action, 'order', orderId, { folio: base.folio });
+      await logAction(!base.createdAt ? 'UPDATE_OST' : 'CREATE_OST', 'order', orderId, { folio: base.folio });
 
       await renderSavedPhotos(update.photosRTDB);
 
@@ -397,10 +587,33 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     }
   });
 
-  // ===== Botón imprimir → navega a #/print?id=... =====
+  // Imprimir
   const btnPrint = el.querySelector('#btnPrint');
   btnPrint.addEventListener('click', () => {
     if (!orderId) return alert('Primero guarda la OST para poder imprimir.');
     location.hash = `#/print?id=${orderId}`;
   });
 }
+
+// —— Estilos para el resumen de cotización (se inyectan una sola vez)
+function ensureQuoteStyles() {
+  if (document.getElementById('quote-summary-styles')) return;
+  const css = `
+  .quote-summary{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
+  .quote-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:.85rem}
+  .quote-hdr{font-weight:600;margin-bottom:.35rem;color:#6b7280;letter-spacing:.02em}
+  .qrow{display:flex;justify-content:space-between;gap:.75rem;padding:.25rem 0}
+  .qrow span{color:#6b7280}
+  .qsep{height:1px;background:#eee;margin:.35rem 0}
+  .qtotal strong{font-size:1.05rem}
+  .qneg{color:#b91c1c}
+  .qmeta{font-size:.85rem;color:#6b7280;margin-top:.25rem}
+  `;
+  const style = document.createElement('style');
+  style.id = 'quote-summary-styles';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+// Formateador de moneda
+const money = (v, c) => new Intl.NumberFormat('es-MX', { style:'currency', currency:c }).format(+v || 0);

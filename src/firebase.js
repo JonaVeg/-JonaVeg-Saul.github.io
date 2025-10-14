@@ -12,8 +12,8 @@ import {
 
 // Firestore
 import {
-  getFirestore, serverTimestamp, collection, doc, addDoc, getDoc,
-  getDocs, setDoc, updateDoc, query, where, orderBy, Timestamp
+  getFirestore, collection, doc, addDoc, getDoc, getDocs, updateDoc, setDoc,
+  serverTimestamp, query, where, orderBy, limit, writeBatch, deleteDoc, Timestamp
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 // Realtime Database (RTDB)
@@ -45,8 +45,9 @@ export const rtdb  = getDatabase(app);
 // Helpers estilo “SDK re-export”
 export const fx = {
   // firestore
-  serverTimestamp, collection, doc, addDoc, getDoc, getDocs,
-  setDoc, updateDoc, query, where, orderBy, Timestamp,
+  collection, doc, addDoc, getDoc, getDocs, updateDoc, setDoc,
+  serverTimestamp, query, where, orderBy, limit,
+  writeBatch, deleteDoc, Timestamp,
   // auth
   onAuthStateChanged, signInWithEmailAndPassword, signOut
 };
@@ -54,6 +55,7 @@ export const fx = {
 export const rfx = {
   rRef, rPush, rSet, rGet, child, onValue
 };
+
 
 // Pequeña prueba opcional
 // console.log('[FIREBASE] listo', app.options?.projectId);

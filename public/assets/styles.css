@@ -600,3 +600,24 @@ main#app { padding-top: 1rem; }
   font-size: .95rem;
   background: #fff;
 }
+
+
+
+/* Combo (cliente) */
+.combo { position: relative; display: grid; gap: .35rem; }
+.combo > input[type="text"] {
+  padding: .6rem .7rem; border:1px solid #d1d5db; border-radius:10px;
+}
+.combo > input[type="text"]:focus {
+  outline: none; border-color:#0d6efd; box-shadow: 0 0 0 3px rgba(13,110,253,.12);
+}
+.listbox {
+  position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 10px;
+  max-height: 260px; overflow: auto; box-shadow: 0 18px 28px -14px rgba(0,0,0,.18);
+}
+.listbox .item { padding: .55rem .7rem; cursor: pointer; }
+.listbox .item:hover, .listbox .item.active { background:#f0f5ff; }
+.listbox .item .title { font-weight: 600; }
+.listbox .item .sub { font-size: .86rem; color:#6b7280; margin-top: 2px; }
+.listbox .empty { padding: .7rem; color:#6b7280; }
