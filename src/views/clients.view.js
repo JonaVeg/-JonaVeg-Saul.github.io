@@ -54,7 +54,7 @@ export default function ClientsView() {
   const addMsg = section.querySelector('#addMsg');
 
   async function loadClients() {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;">Cargando...</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="loading" style="text-align:center;">Cargando...</td></tr>`;
     try {
       const snap = await fx.getDocs(fx.collection(db, 'clients'));
       const rows = [];
@@ -153,51 +153,55 @@ async function deleteClientWithEquipments(clientId, rowEl) {
 
 
   formAdd.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(formAdd);
+  e.preventDefault();
+  const fd = new FormData(formAdd);
 
-    // Cliente
-    const dataClient = {
-      name: fd.get('name')?.toString().trim(),
-      phone: fd.get('phone')?.toString().trim() || '',
-      email: fd.get('email')?.toString().trim() || '',
-      address: fd.get('address')?.toString().trim() || '',
-      createdAt: fx.serverTimestamp(),
-    };
-    if (!dataClient.name) return;
+  // Cliente
+  const dataClient = {
+    name: fd.get('name')?.toString().trim(),
+    phone: fd.get('phone')?.toString().trim() || '',
+    email: fd.get('email')?.toString().trim() || '',
+    address: fd.get('address')?.toString().trim() || '',
+    createdAt: fx.serverTimestamp(),
+  };
+  if (!dataClient.name) return;
 
-    // Equipo (opcional)
-    const eqBrand  = fd.get('eqBrand')?.toString().trim() || '';
-    const eqModel  = fd.get('eqModel')?.toString().trim() || '';
-    const eqSerial = fd.get('eqSerial')?.toString().trim() || '';
+  // Equipo (opcional)
+  const eqBrand = fd.get('eqBrand')?.toString().trim() || '';
+  const eqModel = fd.get('eqModel')?.toString().trim() || '';
+  const eqSerial = fd.get('eqSerial')?.toString().trim() || '';
 
-    addMsg.textContent = 'Guardando...';
-    try {
-      // 1) crear cliente
-      const refClient = await fx.addDoc(fx.collection(db, 'clients'), dataClient);
+  addMsg.textContent = 'Guardando...';
+  try {
+    // 1) crear cliente
+    const refClient = await fx.addDoc(fx.collection(db, 'clients'), dataClient);
 
-      // 2) si hay número de serie, crear equipo vinculado
-      if (eqSerial) {
-        const equipmentPayload = {
-          clientId: refClient.id,
-          brand: eqBrand,
-          model: eqModel,
-          serial: eqSerial,
-          serialUpper: eqSerial.toUpperCase(),
-          createdAt: fx.serverTimestamp(),
-        };
-        await fx.addDoc(fx.collection(db, 'equipments'), equipmentPayload);
-        console.log('[EQUIPMENTS] equipo creado y vinculado', equipmentPayload);
-      }
-
-      addMsg.textContent = '✔ Cliente agregado';
-      formAdd.reset();
-      await loadClients();
-    } catch (err) {
-      console.error('[CLIENTS] Error al crear cliente/equipo', err);
-      addMsg.textContent = '✖ Error al guardar';
+    // 2) si hay número de serie, crear equipo vinculado
+    if (eqSerial) {
+      const equipmentPayload = {
+        clientId: refClient.id,
+        brand: eqBrand,
+        model: eqModel,
+        serial: eqSerial,
+        serialUpper: eqSerial.toUpperCase(),
+        createdAt: fx.serverTimestamp(),
+      };
+      await fx.addDoc(fx.collection(db, 'equipments'), equipmentPayload);
+      console.log('[EQUIPMENTS] equipo creado y vinculado', equipmentPayload);
     }
-  });
+
+    addMsg.textContent = '✔ Cliente agregado';
+    addMsg.classList.add('show');
+    setTimeout(() => addMsg.classList.remove('show'), 3000);
+    formAdd.reset();
+    await loadClients();
+  } catch (err) {
+    console.error('[CLIENTS] Error al crear cliente/equipo', err);
+    addMsg.textContent = '✖ Error al guardar';
+    addMsg.classList.add('show');
+    setTimeout(() => addMsg.classList.remove('show'), 3000);
+  }
+});
 
   btnReload.addEventListener('click', loadClients);
   loadClients();

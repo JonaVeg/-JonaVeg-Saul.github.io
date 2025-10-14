@@ -130,7 +130,7 @@ export default async function OrderPrintView() {
 
     el.innerHTML = `
       <div class="toolbar no-print">
-        <button class="btn" id="btnBack">← Volver</button>
+        <button class="btn primary" id="btnBack">← Volver</button>
         <button class="btn primary" id="btnPrintNow">Imprimir</button>
       </div>
 

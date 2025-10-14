@@ -132,18 +132,83 @@ button[type="button"] { background:#444; }
   margin-top: .5rem;
 }
 
+.row {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+  padding: .5rem 0;
+}
+.row input, .row select {
+  width: auto;
+}
+details.card {
+  padding: .75rem 1rem;
+}
+.row-click {
+  cursor: pointer;
+}
+.row-click:hover {
+  background: #f6f8fb;
+}
 
+#formAdd input[placeholder*="opcional"] {
+  background: #f9fafb;
+  color: #6b7280;
+}
 
-.row { display:flex; gap:.5rem; align-items:center; padding:.5rem 0; }
-.row input, .row select { width:auto; }
-details.card { padding: .75rem 1rem; }
-.row-click { cursor: pointer; }
-.row-click:hover { background: #f6f8fb; }
+#formAdd button {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+#formAdd button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
 
+.clients-table td:last-child {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
 
+.clients-table tr.loading td {
+  background: #f0f0f0;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .clients-table {
+    display: block;
+    overflow-x: auto;
+  }
+  .clients-table tr {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid #eee;
+    padding: 0.5rem;
+  }
+  .clients-table td {
+    padding: 0.5rem 0;
+    border: none;
+  }
+  .clients-table td:last-child {
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+}
+
+#addMsg {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+#addMsg.show {
+  opacity: 1;
+}
 /*Final Clientes*/
-
-
 
 
 /* === DASHBOARD === */
@@ -367,6 +432,9 @@ button.mini {
   font-size: 1.8rem;
   margin-bottom: .75rem;
 }
+button.danger { background:#ef4444; border-color:#ef4444; }
+button.danger:disabled { opacity:.6; }
+
 
 /* ---- Tarjeta de filtros ---- */
 #filters {
@@ -621,3 +689,13 @@ main#app { padding-top: 1rem; }
 .listbox .item .title { font-weight: 600; }
 .listbox .item .sub { font-size: .86rem; color:#6b7280; margin-top: 2px; }
 .listbox .empty { padding: .7rem; color:#6b7280; }
+
+
+
+.totals-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.totals-grid .col{background:#f8f8f8;border:1px solid #eee;border-radius:8px;padding:.75rem}
+.t-title{font-weight:600;margin-bottom:.25rem;color:#222}
+.t-row{display:flex;justify-content:space-between;margin:.15rem 0}
+.t-row.t-strong{font-weight:700}
+.t-row .neg{color:#c22}
+.t-note{margin-top:.5rem;color:#666;font-size:.9em}

@@ -81,7 +81,6 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
           <label>Tipo de cambio USD→MXN
             <input type="number" step="0.0001" name="usdToMxn" value="18.20" />
           </label>
-          <!-- 🔁 IVA (%) → Descuento (%) -->
           <label>Descuento (%)
             <input type="number" step="0.01" name="discountRate" value="0" />
           </label>
@@ -319,14 +318,30 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       row.innerHTML = `
         <input placeholder="Desc" data-f="description" />
         <input placeholder="SKU/Parte" data-f="partNumber" />
-        <input type="number" step="1" placeholder="Qty" data-f="qty" />
+        <input type="number" step="1" placeholder="Cant." data-f="qty" />
         <input type="number" step="0.01" placeholder="P. Unit" data-f="unitPrice" />
         <select data-f="currency"><option>MXN</option><option>USD</option></select>
         <button type="button" data-remove>×</button>`;
     }
     row.querySelector('[data-remove]').onclick = () => { row.remove(); computeTotals(); };
     wrap.appendChild(row);
+    return row;
   };
+
+  function fillRows(listName, arr = []) {
+    const wrap = el.querySelector(`[data-list="${listName}"]`);
+    wrap.innerHTML = '';
+    arr.forEach(it => {
+      const r = addRow(listName);
+      Object.entries(it || {}).forEach(([k, v]) => {
+        const inp = r.querySelector(`[data-f="${k}"]`);
+        if (!inp) return;
+        if (typeof v === 'number') inp.value = Number.isFinite(v) ? v : '';
+        else inp.value = (v ?? '').toString();
+      });
+    });
+  }
+
   el.querySelector('[data-add="parts"]').onclick        = () => { addRow('parts');        computeTotals(); };
   el.querySelector('[data-add="consumables"]').onclick  = () => { addRow('consumables');  computeTotals(); };
   el.querySelector('[data-add="labor"]').onclick        = () => { addRow('labor');        computeTotals(); };
@@ -357,58 +372,37 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     return out;
   }
 
-  // 👉 Ahora calculamos con DESCUENTO, no IVA.
-  // Usamos calcTotals con impuesto 0 y aplicamos el descuento sobre el subtotal.
   function computeTotals() {
-  ensureQuoteStyles();
+    ensureQuoteStyles();
 
-  const usdToMxn     = parseFloat(form.usdToMxn.value || 18.2);
-  const discountRate = parseFloat(form.discountRate?.value || 0) / 100;
+    const usdToMxn     = parseFloat(form.usdToMxn.value || 18.2);
+    const discountRate = parseFloat(form.discountRate.value || 0) / 100; // 0..1
+    const items        = grabItems();
 
-  const items      = grabItems();
-  const baseTotals = calcTotals(items, usdToMxn, 0); // sin impuestos
+    // calcTotals debe devolver: { mx: {subtotal, discount, total}, us:{...} }
+    const totals = calcTotals(items, usdToMxn, discountRate);
 
-  // Descuentos y totales
-  const discMx  = baseTotals.mx.subtotal * discountRate;
-  const discUs  = baseTotals.us.subtotal * discountRate;
-
-  const totalMx = baseTotals.mx.subtotal - discMx;
-  const totalUs = baseTotals.us.subtotal - discUs;
-
-  const pct = (discountRate * 100).toFixed(2);
-
-  totalsBox.innerHTML = `
-    <div class="quote-summary">
-      <div class="quote-card">
-        <div class="quote-hdr">MXN</div>
-        <div class="qrow"><span>Subtotal</span><strong>${money(baseTotals.mx.subtotal,'MXN')}</strong></div>
-        <div class="qrow"><span>Descuento (${pct}%)</span><strong class="qneg">-${money(discMx,'MXN')}</strong></div>
-        <div class="qsep"></div>
-        <div class="qrow qtotal"><span>Total MXN</span><strong>${money(totalMx,'MXN')}</strong></div>
+    totalsBox.innerHTML = `
+      <div class="quote-summary">
+        <div class="quote-card">
+          <div class="quote-hdr">MXN</div>
+          <div class="qrow"><span>Subtotal</span><span>${money(totals.mx.subtotal,'MXN')}</span></div>
+          <div class="qrow"><span>Descuento (${(discountRate*100).toFixed(2)}%)</span><span class="qneg">-${money(totals.mx.discount,'MXN')}</span></div>
+          <div class="qsep"></div>
+          <div class="qrow qtotal"><span><strong>Total MXN</strong></span><span><strong>${money(totals.mx.total,'MXN')}</strong></span></div>
+        </div>
+        <div class="quote-card">
+          <div class="quote-hdr">USD</div>
+          <div class="qrow"><span>Subtotal</span><span>${money(totals.us.subtotal,'USD')}</span></div>
+          <div class="qrow"><span>Discount (${(discountRate*100).toFixed(2)}%)</span><span class="qneg">-${money(totals.us.discount,'USD')}</span></div>
+          <div class="qsep"></div>
+          <div class="qrow qtotal"><span><strong>Total USD</strong></span><span><strong>${money(totals.us.total,'USD')}</strong></span></div>
+        </div>
       </div>
-
-      <div class="quote-card">
-        <div class="quote-hdr">USD</div>
-        <div class="qrow"><span>Subtotal</span><strong>${money(baseTotals.us.subtotal,'USD')}</strong></div>
-        <div class="qrow"><span>Discount (${pct}%)</span><strong class="qneg">-${money(discUs,'USD')}</strong></div>
-        <div class="qsep"></div>
-        <div class="qrow qtotal"><span>Total USD</span><strong>${money(totalUs,'USD')}</strong></div>
-      </div>
-    </div>
-    <div class="qmeta">TC: 1 USD = ${usdToMxn.toFixed(4)} MXN</div>
-  `;
-
-  return {
-    items,
-    usdToMxn,
-    discountRate,
-    totalsCalc: {
-      mx: { subtotal: baseTotals.mx.subtotal, discount: discMx, total: totalMx },
-      us: { subtotal: baseTotals.us.subtotal, discount: discUs, total: totalUs }
-    }
-  };
-}
-
+      <div class="qmeta">TC: 1 USD = ${usdToMxn.toFixed(4)} MXN</div>
+    `;
+    return { items, totals, usdToMxn, discountRate };
+  }
   form.addEventListener('input', computeTotals);
 
   // ===== Fotos guardadas (RTDB) =====
@@ -454,6 +448,16 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
         form.diagnosis.value = o.diagnosis ?? '';
         form.actions.value   = o.actions ?? '';
 
+        // —— Rellenar cotizador desde la OST
+        const q = o.quote || {};
+        if (q.exchangeRate?.usdToMxn) form.usdToMxn.value = q.exchangeRate.usdToMxn;
+        if (typeof q.discountPct === 'number') form.discountRate.value = (q.discountPct * 100).toString();
+        if (typeof q.discountRate === 'number') form.discountRate.value = (q.discountRate * 100).toString(); // compat
+
+        fillRows('parts',       Array.isArray(q.parts)       ? q.parts       : []);
+        fillRows('consumables', Array.isArray(q.consumables) ? q.consumables : []);
+        fillRows('labor',       Array.isArray(q.labor)       ? q.labor       : []);
+
         await renderSavedPhotos(o.photosRTDB);
       }
     } else {
@@ -479,7 +483,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     const clientNameSnapshot = chosenClient ? chosenClient.name : searchInput.value || '';
     const equipmentSnapshot  = equipmentSelect.options[equipmentSelect.selectedIndex]?.text || '';
 
-    const { items, usdToMxn, discountRate, totalsCalc } = computeTotals();
+    const { items, totals, usdToMxn, discountRate } = computeTotals();
 
     const base = {
       folio: form.folio.value.trim(),
@@ -551,28 +555,47 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
 
       const upBefore = await uploadGroup('before', fd.getAll('before'));
       const upAfter  = await uploadGroup('after',  fd.getAll('after'));
+      // Convierte cualquier cosa a número válido para Firestore (0 si viene undefined/NaN)
+      const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+
 
       // Guardamos el descuento y los totales ya descontados
-      const update = {
-        quote: {
-          ...items,
-          discountRate, // porcentaje 0..1
-          exchangeRate: { usdToMxn, setAt: fx.serverTimestamp() },
-          totals: {
-            subtotalMXN: totalsCalc.mx.subtotal,
-            discountMXN: totalsCalc.mx.discount,
-            grandTotalMXN: totalsCalc.mx.total,
-            subtotalUSD: totalsCalc.us.subtotal,
-            discountUSD: totalsCalc.us.discount,
-            grandTotalUSD: totalsCalc.us.total
-          }
-        },
-        photosRTDB: {
-          before: upBefore.keys.length ? upBefore : null,
-          after:  upAfter.keys.length  ? upAfter  : null
-        },
-        updatedAt: fx.serverTimestamp()
-      };
+const mx = {
+  subtotal:  num(totals.mx?.subtotal),
+  discount:  num(totals.mx?.discount),
+  total:     num(totals.mx?.total),
+};
+const us = {
+  subtotal:  num(totals.us?.subtotal),
+  discount:  num(totals.us?.discount),
+  total:     num(totals.us?.total),
+};
+      // Guardamos el descuento y los totales ya descontados
+
+const update = {
+  quote: {
+    ...items,
+    // porcentaje 0..1
+    discountRate: num(discountRate),
+    exchangeRate: { usdToMxn: num(usdToMxn), setAt: fx.serverTimestamp() },
+    totals: {
+      subtotalMXN:  mx.subtotal,
+      discountMXN:  mx.discount,
+      grandTotalMXN: mx.total,
+      subtotalUSD:   us.subtotal,
+      discountUSD:   us.discount,
+      grandTotalUSD: us.total
+    }
+  },
+  photosRTDB: {
+    before: upBefore.keys.length ? upBefore : null,
+    after:  upAfter.keys.length  ? upAfter  : null
+  },
+  updatedAt: fx.serverTimestamp()
+};
+
+
+      
 
       await fx.updateDoc(fx.doc(db, 'orders', orderId), update);
       await logAction(!base.createdAt ? 'UPDATE_OST' : 'CREATE_OST', 'order', orderId, { folio: base.folio });
@@ -603,7 +626,7 @@ function ensureQuoteStyles() {
   .quote-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:.85rem}
   .quote-hdr{font-weight:600;margin-bottom:.35rem;color:#6b7280;letter-spacing:.02em}
   .qrow{display:flex;justify-content:space-between;gap:.75rem;padding:.25rem 0}
-  .qrow span{color:#6b7280}
+  .qrow span{color:#374151}
   .qsep{height:1px;background:#eee;margin:.35rem 0}
   .qtotal strong{font-size:1.05rem}
   .qneg{color:#b91c1c}

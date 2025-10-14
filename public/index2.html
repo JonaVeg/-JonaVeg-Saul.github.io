@@ -12,44 +12,71 @@
   <a href="#app" class="skip-link">Saltar al contenido</a>
 
   <header class="topbar topbar--sticky">
-    <div class="topbar__inner">
+    <div class="topbar__inner container">
       <a href="#/dashboard" class="brand">
         <img src="assets/logocompl.PNG" alt="EVRepairs" class="logo" />
+        <span class="brand__name">EVRepairs</span>
       </a>
 
       <!-- Toggle menú móvil -->
       <button class="nav-toggle" id="navToggle" aria-label="Abrir menú" aria-expanded="false">
-        ☰
+        <span class="bar"></span><span class="bar"></span><span class="bar"></span>
       </button>
 
       <nav class="mainnav" id="mainnav" aria-label="Navegación principal">
-        <a href="#/dashboard" data-route="#/dashboard">Dashboard</a>
-        <a href="#/clients"   data-route="#/clients">Clientes</a>
-        <a href="#/orders"    data-route="#/orders">Órdenes</a>
-        <a href="#/history"   data-route="#/history">Historial</a>
-        <a href="#/login"     data-route="#/login">Salir</a>
+        <a href="#/dashboard" data-route="#/dashboard"><span class="ico">🏠</span>Dashboard</a>
+        <a href="#/clients"   data-route="#/clients"><span class="ico">👥</span>Clientes</a>
+        <a href="#/orders"    data-route="#/orders"><span class="ico">🧾</span>Órdenes</a>
+        <a href="#/history"   data-route="#/history"><span class="ico">📑</span>Historial</a>
+        <a href="#/login"     data-route="#/login" class="logout"><span class="ico">🚪</span>Salir</a>
       </nav>
     </div>
   </header>
 
   <!-- Contenido -->
-  <main id="app"></main>
+  <main id="app" class="container"></main>
 
   <footer class="footer">EVRepairs © 2025</footer>
 
   <!-- App -->
   <script type="module" src="/src/main.js"></script>
 
-  <!-- Toggle del menú móvil (ultraligero) -->
+  <!-- Navegación mejorada (activa, móvil, accesibilidad) -->
   <script>
-    const navBtn = document.getElementById('navToggle');
-    const nav    = document.getElementById('mainnav');
+    const navBtn  = document.getElementById('navToggle');
+    const nav     = document.getElementById('mainnav');
+    const links   = [...document.querySelectorAll('.mainnav a[data-route]')];
+
+    function setActiveByHash() {
+      const hash = location.hash || '#/dashboard';
+      links.forEach(a => {
+        const on = hash.startsWith(a.getAttribute('data-route'));
+        a.classList.toggle('is-active', on);
+        a.setAttribute('aria-current', on ? 'page' : 'false');
+      });
+    }
+
+    // Toggle menú móvil
     if (navBtn && nav) {
       navBtn.addEventListener('click', () => {
         const open = nav.classList.toggle('open');
+        navBtn.classList.toggle('open', open);
         navBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
       });
+
+      // Cierra el menú al navegar
+      nav.addEventListener('click', (e) => {
+        const a = e.target.closest('a');
+        if (!a) return;
+        nav.classList.remove('open');
+        navBtn.classList.remove('open');
+        navBtn.setAttribute('aria-expanded', 'false');
+      });
     }
+
+    window.addEventListener('hashchange', setActiveByHash);
+    setActiveByHash();
   </script>
 </body>
 </html>
+
