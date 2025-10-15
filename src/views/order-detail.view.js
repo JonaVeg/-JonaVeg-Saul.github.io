@@ -69,11 +69,20 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       <fieldset>
         <legend>Fotos</legend>
         <div class="grid">
-          <label>Antes <input type="file" name="before" multiple accept="image/*" /></label>
-          <label>Después <input type="file" name="after" multiple accept="image/*" /></label>
+          <label>Antes
+            <input type="file" name="before" multiple accept="image/*" />
+            <!-- Vista previa -->
+            <div class="thumbs" id="prev-before" aria-live="polite"></div>
+          </label>
+          <label>Después
+            <input type="file" name="after" multiple accept="image/*" />
+            <!-- Vista previa -->
+            <div class="thumbs" id="prev-after" aria-live="polite"></div>
+          </label>
         </div>
         <div id="photosSaved" class="muted" style="margin-top:.5rem"></div>
       </fieldset>
+
 
       <fieldset>
         <legend>Cotizador</legend>
@@ -106,6 +115,40 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
       <button type="button" id="btnPrint" class="muted">Imprimir / PDF</button>
     </form>
   `;
+
+
+  function wireFilePreviews(form, rootEl) {
+  const beforeInput = form.querySelector('input[name="before"]');
+  const afterInput  = form.querySelector('input[name="after"]');
+  const beforeBox   = rootEl.querySelector('#prev-before');
+  const afterBox    = rootEl.querySelector('#prev-after');
+
+  const paint = (fileList, container) => {
+    container.innerHTML = '';
+    if (!fileList || !fileList.length) return;
+
+    [...fileList].forEach(file => {
+      if (!file.type?.startsWith('image/')) return;
+      const fr = new FileReader();
+      fr.onload = (ev) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'thumb';
+        thumb.innerHTML = `
+          <img src="${ev.target.result}" alt="${file.name}">
+          <div class="name" title="${file.name}">${file.name}</div>
+        `;
+        container.appendChild(thumb);
+      };
+      fr.readAsDataURL(file);
+    });
+  };
+
+  beforeInput?.addEventListener('change', () => paint(beforeInput.files, beforeBox));
+  afterInput?.addEventListener('change',  () => paint(afterInput.files,  afterBox));
+}
+
+
+
   app.replaceChildren(el);
 
   const form            = el.querySelector('#form');
@@ -117,6 +160,9 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
   const hiddenClientId  = el.querySelector('#clientId');
   const resultsList     = el.querySelector('#clientList');
   const equipmentSelect = el.querySelector('#equipmentSelect');
+  ensurePreviewStyles();
+  wireFilePreviews(form, el);
+
 
   // =========================
   //  Técnicos
@@ -472,143 +518,166 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
   })();
 
   // ===== Guardar OST + fotos =====
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    msg.textContent = 'Guardando...';
+// ===== Guardar OST + fotos =====
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  msg.textContent = 'Guardando...';
 
-    const chosenClientId    = hiddenClientId.value || '';
-    const chosenEquipmentId = equipmentSelect.value || '';
+  const chosenClientId    = hiddenClientId.value || '';
+  const chosenEquipmentId = equipmentSelect.value || '';
 
-    const chosenClient = allClients.find(c => c.id === chosenClientId);
-    const clientNameSnapshot = chosenClient ? chosenClient.name : searchInput.value || '';
-    const equipmentSnapshot  = equipmentSelect.options[equipmentSelect.selectedIndex]?.text || '';
+  const chosenClient = allClients.find(c => c.id === chosenClientId);
+  const clientNameSnapshot = chosenClient ? chosenClient.name : searchInput.value || '';
+  const equipmentSnapshot  = equipmentSelect.options[equipmentSelect.selectedIndex]?.text || '';
 
-    const { items, totals, usdToMxn, discountRate } = computeTotals();
+  const { items, totals, usdToMxn, discountRate } = computeTotals();
 
-    const base = {
-      folio: form.folio.value.trim(),
-      date: fx.Timestamp.fromDate(new Date(form.date.value)),
-      status: form.status.value,
-      clientId: chosenClientId,
-      equipmentId: chosenEquipmentId,
-      clientNameSnapshot,
-      equipmentSnapshot,
-      technicianId: techSelect.value.trim() || '',
-      technicianName: techSelect.options[techSelect.selectedIndex]?.text || '',
-      symptom: form.symptom.value.trim(),
-      diagnosis: form.diagnosis.value.trim(),
-      actions: form.actions.value.trim(),
+  const base = {
+    folio: form.folio.value.trim(),
+    date: fx.Timestamp.fromDate(new Date(form.date.value)),
+    status: form.status.value,
+    clientId: chosenClientId,
+    equipmentId: chosenEquipmentId,
+    clientNameSnapshot,
+    equipmentSnapshot,
+    technicianId: techSelect.value.trim() || '',
+    technicianName: techSelect.options[techSelect.selectedIndex]?.text || '',
+    symptom: form.symptom.value.trim(),
+    diagnosis: form.diagnosis.value.trim(),
+    actions: form.actions.value.trim(),
+    updatedAt: fx.serverTimestamp()
+  };
+  if (!orderId) base.createdAt = fx.serverTimestamp();
+
+  try {
+    // 1) crear/actualizar base
+    if (!orderId) {
+      const ref = await fx.addDoc(fx.collection(db, 'orders'), base);
+      orderId = ref.id;
+    } else {
+      await fx.updateDoc(fx.doc(db, 'orders', orderId), base);
+    }
+
+    // 2) MANEJO DE FOTOS (conservando las existentes si no hay nuevas)
+    const fd = new FormData(form);
+    const beforeFiles = fd.getAll('before').filter(f => f && f.size);
+    const afterFiles  = fd.getAll('after').filter(f => f && f.size);
+
+    // lee el doc actual para no perder photosRTDB previas
+    let existingPhotos = null;
+    try {
+      const cur = await fx.getDoc(fx.doc(db, 'orders', orderId));
+      existingPhotos = cur.data()?.photosRTDB || null;
+    } catch {}
+
+    async function fileToDataUrlCompressed(file, maxW = 1280, quality = 0.72) {
+      if (!file || !file.type?.startsWith('image/')) throw new Error('Archivo no es una imagen válida');
+      const dataURL = await new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = () => rej(new Error('No se pudo leer el archivo'));
+        fr.readAsDataURL(file);
+      });
+      const img = await new Promise((res, rej) => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => rej(new Error('No se pudo procesar la imagen'));
+        im.src = dataURL;
+      });
+      const scale = Math.min(1, maxW / img.width || 1);
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL('image/jpeg', quality);
+    }
+
+    async function uploadListTo(groupName, files) {
+      if (!files.length) return false; // no hay nuevos archivos
+      const path = `ost_photos/${orderId}/${groupName}`;
+      for (const file of files) {
+        try {
+          const dataUrl = await fileToDataUrlCompressed(file, 1280, 0.72);
+          const nodeRef = rfx.rRef(rtdb, path);
+          const pushed = rfx.rPush(nodeRef);
+          await rfx.rSet(pushed, { dataUrl, createdAt: Date.now() });
+        } catch (err) {
+          console.warn(`[PHOTOS] ${groupName} omitida:`, err?.message || err);
+        }
+      }
+      return { path }; // devolvemos el apuntador para guardarlo (igual que antes)
+    }
+
+    // sube solo si hay archivos nuevos
+    const newBefore = await uploadListTo('before', beforeFiles);
+    const newAfter  = await uploadListTo('after',  afterFiles);
+
+    // 3) Totales + exchange + descuento
+    const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+    const mx = {
+      subtotal: num(totals.mx?.subtotal),
+      discount: num(totals.mx?.discount),
+      total:    num(totals.mx?.total),
+    };
+    const us = {
+      subtotal: num(totals.us?.subtotal),
+      discount: num(totals.us?.discount),
+      total:    num(totals.us?.total),
+    };
+
+    // 4) Construir payload final de actualización SIN pisar photosRTDB si no hay fotos nuevas
+    const patch = {
+      quote: {
+        ...items,
+        discountRate: num(discountRate), // 0..1
+        exchangeRate: { usdToMxn: num(usdToMxn), setAt: fx.serverTimestamp() },
+        totals: {
+          subtotalMXN:  mx.subtotal,
+          discountMXN:  mx.discount,
+          grandTotalMXN: mx.total,
+          subtotalUSD:   us.subtotal,
+          discountUSD:   us.discount,
+          grandTotalUSD: us.total
+        }
+      },
       updatedAt: fx.serverTimestamp()
     };
-    if (!orderId) base.createdAt = fx.serverTimestamp();
 
-    try {
-      if (!orderId) {
-        const ref = await fx.addDoc(fx.collection(db, 'orders'), base);
-        orderId = ref.id;
-      } else {
-        await fx.updateDoc(fx.doc(db, 'orders', orderId), base);
-      }
+    // compón photosRTDB conservando las existentes cuando no hay nuevas
+    const photosRTDB = {
+      before: newBefore ? newBefore : (existingPhotos?.before || null),
+      after:  newAfter  ? newAfter  : (existingPhotos?.after  || null),
+    };
 
-      const fd = new FormData(form);
-
-      async function fileToDataUrlCompressed(file, maxW = 1280, quality = 0.72) {
-        if (!file || !file.type?.startsWith('image/')) throw new Error('Archivo no es una imagen válida');
-        const dataURL = await new Promise((res, rej) => {
-          const fr = new FileReader();
-          fr.onload = () => res(fr.result);
-          fr.onerror = () => rej(new Error('No se pudo leer el archivo'));
-          fr.readAsDataURL(file);
-        });
-        const img = await new Promise((res, rej) => {
-          const im = new Image();
-          im.onload = () => res(im);
-          im.onerror = () => rej(new Error('No se pudo procesar la imagen'));
-          im.src = dataURL;
-        });
-        const scale = Math.min(1, maxW / img.width || 1);
-        const w = Math.max(1, Math.round(img.width * scale));
-        const h = Math.max(1, Math.round(img.height * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, w, h);
-        return canvas.toDataURL('image/jpeg', quality);
-      }
-
-      async function uploadGroup(name, fileList) {
-        const path = `ost_photos/${orderId}/${name}`;
-        const keys = [];
-        for (const file of (fileList ?? [])) {
-          try {
-            const dataUrl = await fileToDataUrlCompressed(file, 1280, 0.72);
-            const nodeRef = rfx.rRef(rtdb, path);
-            const pushed = rfx.rPush(nodeRef);
-            await rfx.rSet(pushed, { dataUrl, createdAt: Date.now() });
-            keys.push(pushed.key);
-          } catch (imgErr) {
-            console.warn(`[PHOTOS] ${name} omitida:`, imgErr?.message || imgErr);
-          }
-        }
-        return { path, keys };
-      }
-
-      const upBefore = await uploadGroup('before', fd.getAll('before'));
-      const upAfter  = await uploadGroup('after',  fd.getAll('after'));
-      // Convierte cualquier cosa a número válido para Firestore (0 si viene undefined/NaN)
-      const num = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
-
-
-      // Guardamos el descuento y los totales ya descontados
-const mx = {
-  subtotal:  num(totals.mx?.subtotal),
-  discount:  num(totals.mx?.discount),
-  total:     num(totals.mx?.total),
-};
-const us = {
-  subtotal:  num(totals.us?.subtotal),
-  discount:  num(totals.us?.discount),
-  total:     num(totals.us?.total),
-};
-      // Guardamos el descuento y los totales ya descontados
-
-const update = {
-  quote: {
-    ...items,
-    // porcentaje 0..1
-    discountRate: num(discountRate),
-    exchangeRate: { usdToMxn: num(usdToMxn), setAt: fx.serverTimestamp() },
-    totals: {
-      subtotalMXN:  mx.subtotal,
-      discountMXN:  mx.discount,
-      grandTotalMXN: mx.total,
-      subtotalUSD:   us.subtotal,
-      discountUSD:   us.discount,
-      grandTotalUSD: us.total
+    // si al menos uno existe, inclúyelo; si ambos quedan null, no mandes photosRTDB
+    if (photosRTDB.before || photosRTDB.after) {
+      patch.photosRTDB = photosRTDB;
     }
-  },
-  photosRTDB: {
-    before: upBefore.keys.length ? upBefore : null,
-    after:  upAfter.keys.length  ? upAfter  : null
-  },
-  updatedAt: fx.serverTimestamp()
-};
+
+    await fx.updateDoc(fx.doc(db, 'orders', orderId), patch);
+    await logAction(!base.createdAt ? 'UPDATE_OST' : 'CREATE_OST', 'order', orderId, { folio: base.folio });
+
+    // refresca el panel de fotos con lo efectivo que quedó
+    await renderSavedPhotos(patch.photosRTDB || existingPhotos);
+
+    msg.textContent = '✔ Guardado';
+    alert('OST guardada correctamente');
+  } catch (err) {
+    console.error('[ORDERS] save error', err);
+    msg.textContent = '✖ Error al guardar: ' + (err?.message || String(err));
+  }
+});
 
 
-      
 
-      await fx.updateDoc(fx.doc(db, 'orders', orderId), update);
-      await logAction(!base.createdAt ? 'UPDATE_OST' : 'CREATE_OST', 'order', orderId, { folio: base.folio });
 
-      await renderSavedPhotos(update.photosRTDB);
 
-      msg.textContent = '✔ Guardado';
-      alert('OST guardada correctamente');
-    } catch (err) {
-      console.error('[ORDERS] save error', err);
-      msg.textContent = '✖ Error al guardar: ' + (err?.message || String(err));
-    }
-  });
+
+
+
+
 
   // Imprimir
   const btnPrint = el.querySelector('#btnPrint');
@@ -637,6 +706,19 @@ function ensureQuoteStyles() {
   style.textContent = css;
   document.head.appendChild(style);
 }
+function ensurePreviewStyles() {
+  if (document.getElementById('thumb-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'thumb-styles';
+  s.textContent = `
+    .thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .thumb{position:relative;width:120px;height:90px;border-radius:8px;overflow:hidden;border:1px solid #e5e7eb;background:#f8fafc}
+    .thumb img{width:100%;height:100%;object-fit:cover}
+    .thumb .name{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);color:#fff;font-size:.70rem;padding:2px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  `;
+  document.head.appendChild(s);
+}
+
 
 // Formateador de moneda
 const money = (v, c) => new Intl.NumberFormat('es-MX', { style:'currency', currency:c }).format(+v || 0);
