@@ -1,5 +1,3 @@
-
-
 // src/firebase.js
 // Importa desde CDN (sin bundler)
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js';
@@ -7,7 +5,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/fireba
 // Auth
 import {
   getAuth, onAuthStateChanged,
-  signInWithEmailAndPassword, signOut
+  signInWithEmailAndPassword, signOut,
+  sendEmailVerification
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js';
 
 // Firestore
@@ -32,8 +31,6 @@ const firebaseConfig = {
   appId: "1:897023578787:web:3252ec57f86bed8a362516"
 };
 
-
-
 // ⚠️ Inicializa primero y luego usa `app`
 export const app = initializeApp(firebaseConfig);
 
@@ -49,14 +46,11 @@ export const fx = {
   serverTimestamp, query, where, orderBy, limit,
   writeBatch, deleteDoc, Timestamp,
   // auth
-  onAuthStateChanged, signInWithEmailAndPassword, signOut
+  onAuthStateChanged, signInWithEmailAndPassword, signOut, sendEmailVerification
 };
 
 export const rfx = {
   rRef, rPush, rSet, rGet, child, onValue
 };
 
-
-// Pequeña prueba opcional
 // console.log('[FIREBASE] listo', app.options?.projectId);
-

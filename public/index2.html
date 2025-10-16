@@ -73,6 +73,15 @@
         navBtn.setAttribute('aria-expanded', 'false');
       });
     }
+    // dentro de onAuthStateChanged(auth, user => { ... })
+if (user && !user.emailVerified) {
+  // Mantén al usuario en /login hasta que verifique su correo
+  if (!location.hash.startsWith('#/login')) {
+    location.hash = '#/login';
+  }
+  return;
+}
+
 
     window.addEventListener('hashchange', setActiveByHash);
     setActiveByHash();
