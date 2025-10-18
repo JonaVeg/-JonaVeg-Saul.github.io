@@ -89,6 +89,33 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!user) protectRoutes();
   });
 
+
+
+  fx.onAuthStateChanged(auth, (user) => {
+  console.log('[AUTH] onAuthStateChanged', {
+    logged: !!user,
+    uid: user?.uid || null,
+    email: user?.email || null
+  });
+
+  // Bloquear si no ha verificado su correo
+  if (user && !user.emailVerified) {
+    if (location.hash.split('?')[0] !== '#/login') {
+      location.hash = '#/login';
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    }
+    return;
+  }
+
+  if (user && (location.hash === '#/login' || !location.hash)) {
+    location.hash = '#/dashboard';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  }
+
+  if (!user) protectRoutes();
+});
+
+
   // ===== Arranque inicial =====
   startRouter('#/login');
   refreshTopbar();

@@ -1,155 +1,430 @@
 // src/views/dashboard.view.js
-import { db, fx } from '../firebase.js';
+import { auth, db, fx } from '../firebase.js';
 
-function fmtDate(ts) {
-  try {
-    if (!ts) return '-';
-    const d = ts.toDate ? ts.toDate() : new Date(ts);
-    return d.toLocaleDateString();
-  } catch { return '-'; }
+const C = { ORDERS:'orders', MESSAGES:'messages', NOTIFS:'notifications' };
+
+/** ========= SWITCHES =========
+ * Pon USE_DATE_FILTERS = false mientras NO tengas índices compuestos.
+ * Cuando ya los crees, cambia a true y, si quieres, también a true APPLY_DATE_ON_STATUS.
+ */
+const USE_DATE_FILTERS = false;     // ← temporal para que no pida índices
+const APPLY_DATE_ON_STATUS = false; // ← evita índice en conteos por status+fecha
+const KPI_DAYS = 30;
+
+/* ---------- Helpers generales ---------- */
+function toMillis(ts){ if(typeof ts==='number') return ts; if(ts?.seconds) return ts.seconds*1000; return Date.now(); }
+function isIndexError(err){ const m=String(err?.message||'').toLowerCase(); return err?.code==='failed-precondition'||m.includes('requires an index')||m.includes('failed_precondition'); }
+function indexHelpMessage(){ return 'Falta crear un índice compuesto en Firestore (ver enlace en la consola).'; }
+function permHelpMessage(){ return 'Sin permisos (revisa reglas de Firestore).'; }
+
+/** Filtro de fecha (para createdAt >= cutoff). */
+function createdAtFilter(days){
+  if(!USE_DATE_FILTERS) return [];
+  const cutoffMs = Date.now() - days*24*60*60*1000;
+  // Si createdAt es NUMBER (ms), cambia la línea de abajo por "cutoffMs"
+  const cutoff = fx.Timestamp.fromMillis(cutoffMs);
+  return [ fx.where('createdAt','>=', cutoff) ];
 }
 
-export default function DashboardView() {
-  const el = document.createElement('section');
-  el.className = 'dash';
+export default function DashboardView(){
+  const $el = document.createElement('section');
+  $el.className = 'dash';
 
-  el.innerHTML = `
-    <div class="dash-hero card">
-      <h1>Dashboard</h1>
-      <p class="muted">Busca el historial de un equipo por su número de serie.</p>
-
-      <div class="dash-search">
-        <input id="sn" placeholder="Ej. ABC001 o ABC123XYZ789" />
-        <button id="btnFind" class="cta">Buscar</button>
+  $el.innerHTML = `
+    <div class="dash-hero">
+      <div class="hero-left">
+        <h1>EVRepairs <span class="dot blue"></span></h1>
+        <span class="tip muted">Panel principal</span>
       </div>
-
-      <small class="muted tip">
-        Consejo: ingresa el número de serie exacto para obtener resultados precisos.
-      </small>
+      <div class="dash-actions"><button id="btnRefresh" class="cta">Actualizar</button></div>
     </div>
 
-    <div id="results" class="dash-results"></div>
+    <!-- KPIs -->
+    <section class="kpi-cards">
+      <article class="kpi-card">
+        <div class="kpi-icon">📈</div>
+        <div class="kpi-body">
+          <h3>Total de órdenes (${USE_DATE_FILTERS?`${KPI_DAYS} días`:'histórico'})</h3>
+          <p class="kpi-num" id="kpiTotal">—</p>
+          <small id="kpiTotalSub" class="muted">Cargando...</small>
+        </div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-icon">✅</div>
+        <div class="kpi-body">
+          <h3>Completadas</h3>
+          <p class="kpi-num" id="kpiDone">—</p>
+          <small id="kpiDoneSub" class="muted">Cargando...</small>
+        </div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-icon">🕒</div>
+        <div class="kpi-body">
+          <h3>Pendientes</h3>
+          <p class="kpi-num" id="kpiPending">—</p>
+          <small id="kpiPendingSub" class="muted">Cargando...</small>
+        </div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-icon">💬</div>
+        <div class="kpi-body">
+          <h3>Mensajes nuevos</h3>
+          <p class="kpi-num" id="kpiMsgs">—</p>
+          <small id="kpiMsgsSub" class="muted">Cargando...</small>
+        </div>
+      </article>
+    </section>
+
+    <!-- Resumen por estatus -->
+    <section class="card panel-status">
+      <div class="result-head">
+        <div>
+          <div class="kicker">Resumen</div>
+          <div class="title">Órdenes por estatus (histórico)</div>
+          <div class="sub muted">Conteo rápido</div>
+        </div>
+      </div>
+      <ul class="status-summary" id="statusSummary">
+        <li><span class="dot dot-new"></span> Nuevas <strong id="stNew">—</strong></li>
+        <li><span class="dot dot-wip"></span> En progreso <strong id="stWip">—</strong></li>
+        <li><span class="dot dot-done"></span> Completadas <strong id="stDone">—</strong></li>
+      </ul>
+    </section>
+
+    <!-- Tendencia 14 días -->
+    <section class="card panel-trend">
+      <div class="result-head">
+        <div>
+          <div class="kicker">Tendencia</div>
+          <div class="title">Órdenes creadas — últimas 2 semanas</div>
+          <div class="sub muted" id="trendSubtitle">Cargando…</div>
+        </div>
+      </div>
+      <div class="trend-wrap">
+        <svg id="trendSvg" viewBox="0 0 600 120" preserveAspectRatio="none" class="trend-svg"></svg>
+        <div class="trend-legend" id="trendLegend"></div>
+      </div>
+    </section>
+
+    <!-- Resultados -->
+    <section class="dash-results">
+      <!-- Actividad -->
+      <article class="card result-card">
+        <div class="result-head">
+          <div>
+            <div class="kicker">Actividad</div>
+            <div class="title">Últimos movimientos</div>
+            <div class="sub muted">Órdenes recientes</div>
+          </div>
+          <span class="badge">Reciente</span>
+        </div>
+        <div class="table-wrap">
+          <table class="mini-table">
+            <thead>
+              <tr><th>ID</th><th>Título</th><th>Estatus</th><th>Fecha</th></tr>
+            </thead>
+            <tbody id="tbodyActivity">
+              <tr><td colspan="4" class="muted">Cargando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <!-- Notificaciones -->
+      <article class="card result-card">
+        <div class="result-head">
+          <div>
+            <div class="kicker">Notificaciones</div>
+            <div class="title">Para ti</div>
+            <div class="sub muted">Últimas 10</div>
+          </div>
+          <button id="btnMarkAll" class="mini">Marcar todo leído</button>
+        </div>
+        <ul class="list" id="listNotifs" style="margin-top:.5rem"></ul>
+      </article>
+    </section>
+
+    <!-- Vencidas -->
+    <section class="card panel-overdue" id="overduePanel" style="display:none">
+      <div class="result-head">
+        <div>
+          <div class="kicker">Atención</div>
+          <div class="title">Órdenes vencidas</div>
+          <div class="sub muted">promisedAt &lt; ahora y status != done</div>
+        </div>
+      </div>
+      <ul class="list" id="overdueList"></ul>
+    </section>
   `;
 
-  const input = el.querySelector('#sn');
-  const btn   = el.querySelector('#btnFind');
-  const box   = el.querySelector('#results');
+  $el.querySelector('#btnRefresh')?.addEventListener('click',()=>refreshAll($el));
+  $el.querySelector('#btnMarkAll')?.addEventListener('click',()=>markAllAsRead($el));
+  refreshAll($el);
+  return $el;
+}
 
-  const renderEmpty = (msg = 'Sin resultados') => {
-    box.innerHTML = `
-      <div class="empty card">
-        <div>🔎</div>
-        <div>${msg}</div>
-      </div>`;
-  };
+/* ====== Data loaders ====== */
+async function refreshAll(root){
+  const user = auth.currentUser; if(!user) return;
+  await Promise.all([
+    loadKPIs(root,user),
+    loadActivity(root),
+    loadNotifs(root,user),
+    loadStatusSummary(root), // nuevo
+    loadTrend14d(root),      // nuevo
+    loadOverdue(root)        // nuevo (solo si hay promisedAt)
+  ]);
+}
 
-  renderEmpty('Ingresa un número de serie para iniciar la búsqueda.');
+async function loadKPIs(root,user){
+  try{
+    const ordersCol = fx.collection(db, C.ORDERS);
+    const dateFilter = createdAtFilter(KPI_DAYS); // [] si USE_DATE_FILTERS=false
 
-  async function handleSearch() {
-    const sn = input.value.trim();
-    if (!sn) {
-      renderEmpty('Escribe un número de serie y presiona “Buscar”.');
+    // Total (con o sin fecha)
+    const qTotal = fx.query(ordersCol, ...dateFilter);
+
+    // Para evitar índices: si APPLY_DATE_ON_STATUS es false, NO agregamos filtro de fecha
+    const qDone = fx.query(
+      ordersCol,
+      fx.where('status','==','done'),
+      ...(APPLY_DATE_ON_STATUS ? dateFilter : [])
+    );
+
+    const qPending = fx.query(
+      ordersCol,
+      fx.where('status','in',['new','in_progress']),
+      ...(APPLY_DATE_ON_STATUS ? dateFilter : [])
+    );
+
+    const [cTotal,cDone,cPending] = await Promise.all([
+      fx.getCountFromServer(qTotal),
+      fx.getCountFromServer(qDone),
+      fx.getCountFromServer(qPending),
+    ]);
+
+    const total=cTotal.data().count||0, done=cDone.data().count||0, pending=cPending.data().count||0;
+    root.querySelector('#kpiTotal').textContent = total;
+    root.querySelector('#kpiDone').textContent = done;
+    root.querySelector('#kpiPending').textContent = pending;
+    root.querySelector('#kpiTotalSub').textContent = USE_DATE_FILTERS?`Últimos ${KPI_DAYS} días`:'Total histórico';
+    root.querySelector('#kpiDoneSub').textContent = total?`Tasa: ${Math.round((done/Math.max(total,1))*100)}%`:'Sin datos';
+    root.querySelector('#kpiPendingSub').textContent = pending?'Atención requerida':'Todo al día';
+
+    // Mensajes no leídos
+    const qUnread = fx.query(
+      fx.collection(db,C.MESSAGES),
+      fx.where('toUid','==',user.uid),
+      fx.where('read','==',false)
+    );
+    const unreadAgg = await fx.getCountFromServer(qUnread);
+    const unread = unreadAgg.data().count||0;
+    root.querySelector('#kpiMsgs').textContent = unread;
+    root.querySelector('#kpiMsgsSub').textContent = unread?'Tienes mensajes':'Sin nuevos mensajes';
+  }catch(err){
+    console.error('[DASH] loadKPIs error:', err);
+    const msg = isIndexError(err)? indexHelpMessage()
+              : (err?.code==='permission-denied'? permHelpMessage() : 'Error al cargar');
+    ['#kpiTotalSub','#kpiDoneSub','#kpiPendingSub','#kpiMsgsSub'].forEach(sel=>{
+      const el = document.querySelector(sel); if(el) el.textContent = msg;
+    });
+  }
+}
+
+async function loadActivity(root){
+  const tbody = root.querySelector('#tbodyActivity');
+  tbody.innerHTML = `<tr><td colspan="4" class="muted">Cargando…</td></tr>`;
+  try{
+    const q = fx.query(
+      fx.collection(db,C.ORDERS),
+      fx.orderBy('createdAt','desc'),
+      fx.limit(10)
+    );
+    const snap = await fx.getDocs(q);
+    if(snap.empty){
+      tbody.innerHTML = `<tr><td colspan="4" class="muted">Sin actividad reciente.</td></tr>`;
       return;
     }
-
-    box.innerHTML = '<div class="loading card">Buscando…</div>';
-
-    try {
-      // 1) Buscar equipos por número de serie
-      const eqQ = fx.query(
-        fx.collection(db, 'equipments'),
-        fx.where('serial', '==', sn)
-      );
-      const eqSnap = await fx.getDocs(eqQ);
-
-      if (eqSnap.empty) {
-        renderEmpty('No se encontró ningún equipo con ese número de serie.');
-        return;
-      }
-
-      // 2) Para cada equipo, cargar cliente y sus últimas órdenes
-      const cards = [];
-      for (const eqDoc of eqSnap.docs) {
-        const eq = eqDoc.data() || {};
-        let clientName = '-';
-
-        if (eq.clientId) {
-          const cSnap = await fx.getDoc(fx.doc(db, 'clients', eq.clientId));
-          clientName = cSnap.exists() ? (cSnap.data().name || '-') : '-';
-        }
-
-        const ordQ = fx.query(
-          fx.collection(db, 'orders'),
-          fx.where('equipmentId', '==', eqDoc.id),
-          fx.orderBy('createdAt', 'desc')
-        );
-        const ordSnap = await fx.getDocs(ordQ);
-
-        const rows = [];
-        ordSnap.docs.slice(0, 3).forEach(d => {
-          const o = d.data() || {};
-          rows.push(`
-            <tr>
-              <td>${o.folio || d.id}</td>
-              <td>${o.status || '-'}</td>
-              <td>${fmtDate(o.date || o.createdAt)}</td>
-              <td><button class="mini" data-open="${d.id}">Abrir</button></td>
-            </tr>
-          `);
-        });
-
-        cards.push(`
-          <div class="result-card card">
-            <div class="result-head">
-              <div>
-                <div class="kicker">Equipo</div>
-                <div class="title">
-                  <strong>${eq.serial || '(Sin serie)'}</strong>
-                </div>
-                <div class="sub muted">
-                  ${eq.brand || ''} ${eq.model || ''} • Cliente: ${clientName}
-                </div>
-              </div>
-              <div class="badge">${ordSnap.size} ${ordSnap.size === 1 ? 'orden' : 'órdenes'}</div>
-            </div>
-
-            <div class="table-wrap">
-              <table class="mini-table">
-                <thead>
-                  <tr><th>Folio</th><th>Estatus</th><th>Fecha</th><th></th></tr>
-                </thead>
-                <tbody>
-                  ${
-                    rows.length
-                      ? rows.join('')
-                      : `<tr><td colspan="4" class="muted" style="text-align:center;">Sin órdenes</td></tr>`
-                  }
-                </tbody>
-              </table>
-            </div>
-          </div>
-        `);
-      }
-
-      box.innerHTML = cards.join('');
-
-      // Abrir OST
-      box.querySelectorAll('[data-open]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.getAttribute('data-open');
-          window.renderOrderDetail?.(id);
-        });
-      });
-    } catch (err) {
-      console.error('[DASH] error', err);
-      renderEmpty('Ocurrió un error al buscar. Intenta de nuevo.');
-    }
+    const rows=[]; snap.forEach(d=>{
+      const data=d.data(); const ms=toMillis(data?.createdAt);
+      rows.push(`<tr class="row-click" title="Abrir"><td>${d.id}</td><td>${escapeHtml(data?.title||'Orden')}</td><td>${badgeStatus(data?.status)}</td><td>${new Date(ms).toLocaleString()}</td></tr>`);
+    });
+    tbody.innerHTML = rows.join('');
+  }catch(err){
+    console.error('[DASH] loadActivity error:', err);
+    const msg = isIndexError(err)? indexHelpMessage()
+              : (err?.code==='permission-denied'? permHelpMessage() : 'Error al cargar actividad.');
+    tbody.innerHTML = `<tr><td colspan="4" class="muted">${msg}</td></tr>`;
   }
+}
 
-  btn.addEventListener('click', handleSearch);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') handleSearch();
+async function loadNotifs(root,user){
+  const ul = root.querySelector('#listNotifs'); ul.innerHTML = `<li class="muted">Cargando…</li>`;
+  try{
+    const q = fx.query(
+      fx.collection(db,C.NOTIFS),
+      fx.where('uid','==',user.uid),
+      fx.orderBy('createdAt','desc'),
+      fx.limit(10)
+    );
+    const snap = await fx.getDocs(q);
+    if(snap.empty){ ul.innerHTML = `<li class="muted">No tienes notificaciones.</li>`; return; }
+    const items=[]; snap.forEach(d=>{
+      const n=d.data(); const ms=toMillis(n?.createdAt);
+      items.push(`<li class="row" data-id="${d.id}">
+        <div><strong>${escapeHtml(n?.title||'Notificación')}</strong>
+        <div class="muted">${new Date(ms).toLocaleString()} — ${n?.read?'Leída':'No leída'}</div></div>
+        <button class="mini" data-mark="1" ${n?.read?'disabled':''}>${n?.read?'Leída':'Marcar leído'}</button></li>`);
+    });
+    ul.innerHTML = items.join('');
+    ul.querySelectorAll('button[data-mark]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const li = btn.closest('li'); const id = li.getAttribute('data-id');
+        await fx.updateDoc(fx.doc(db,C.NOTIFS,id), {read:true});
+        await loadNotifs(root,user); await loadKPIs(root,user);
+      });
+    });
+  }catch(err){
+    console.error('[DASH] loadNotifs error:', err);
+    const msg = isIndexError(err)? indexHelpMessage()
+              : (err?.code==='permission-denied'? permHelpMessage() : 'Error al cargar notificaciones.');
+    ul.innerHTML = `<li class="muted">• ${msg}</li>`;
+  }
+}
+
+/* ====== NUEVOS BLOQUES ====== */
+
+// 1) Resumen por estatus (histórico)
+async function loadStatusSummary(root){
+  try{
+    const col = fx.collection(db, C.ORDERS);
+    const [cNew, cWip, cDone] = await Promise.all([
+      fx.getCountFromServer(fx.query(col, fx.where('status','==','new'))),
+      fx.getCountFromServer(fx.query(col, fx.where('status','==','in_progress'))),
+      fx.getCountFromServer(fx.query(col, fx.where('status','==','done')))
+    ]);
+    root.querySelector('#stNew').textContent  = cNew.data().count || 0;
+    root.querySelector('#stWip').textContent  = cWip.data().count || 0;
+    root.querySelector('#stDone').textContent = cDone.data().count || 0;
+  }catch(err){
+    console.error('[DASH] loadStatusSummary error:', err);
+    ['#stNew','#stWip','#stDone'].forEach(sel=>{
+      const el = root.querySelector(sel); if(el) el.textContent = '—';
+    });
+  }
+}
+
+// 2) Tendencia 14 días (where+orderBy mismo campo → sin índice compuesto)
+async function loadTrend14d(root){
+  try{
+    const days = 14;
+    const sinceMs = Date.now() - days*24*60*60*1000;
+    // Si createdAt es NUMBER, cambia a "sinceMs"
+    const sinceTs = fx.Timestamp.fromMillis(sinceMs);
+
+    const q = fx.query(
+      fx.collection(db, C.ORDERS),
+      fx.where('createdAt','>=', sinceTs),
+      fx.orderBy('createdAt','asc')
+    );
+    const snap = await fx.getDocs(q);
+
+    // Agregar por día
+    const byDay = new Map();
+    for(let i=0;i<days;i++){
+      const d = new Date(sinceMs + i*86400000);
+      byDay.set(d.toISOString().slice(0,10), 0);
+    }
+    snap.forEach(docSnap=>{
+      const ms = toMillis(docSnap.data()?.createdAt);
+      const key = new Date(ms).toISOString().slice(0,10);
+      if(byDay.has(key)) byDay.set(key, byDay.get(key)+1);
+    });
+
+    const labels = [...byDay.keys()];
+    const values = [...byDay.values()];
+    root.querySelector('#trendSubtitle').textContent =
+      `${values.reduce((a,b)=>a+b,0)} órdenes en ${days} días`;
+
+    renderSparkline('#trendSvg', values);
+    renderLegend('#trendLegend', labels, values);
+  }catch(err){
+    console.error('[DASH] loadTrend14d error:', err);
+    root.querySelector('#trendSubtitle').textContent = 'No se pudo cargar la tendencia';
+  }
+}
+
+function renderSparkline(svgSel, values){
+  const svg = document.querySelector(svgSel);
+  if(!svg) return;
+  const W=600, H=120, pad=10;
+  const n = values.length || 1;
+  const max = Math.max(1, ...values);
+  const step = (W - pad*2) / Math.max(1, n-1);
+
+  const pts = values.map((v,i)=>{
+    const x = pad + i*step;
+    const y = H - pad - (v/max)*(H - pad*2);
+    return [x,y];
   });
 
-  return el;
+  const d = pts.map((p,i)=> (i?'L':'M') + p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  svg.innerHTML = `
+    <path d="${d}" fill="none" stroke="currentColor" stroke-width="2"></path>
+    <line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="#e5e7eb"></line>
+    <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${H-pad}" stroke="#e5e7eb"></line>
+  `;
+  svg.style.color = '#2563eb';
 }
+
+function renderLegend(containerSel, labels, values){
+  const el = document.querySelector(containerSel);
+  if(!el) return;
+  const last = values.at(-1) ?? 0;
+  const max = Math.max(...values,0);
+  el.innerHTML = `<div class="muted">Último día: <strong>${last}</strong> · Pico: <strong>${max}</strong></div>`;
+}
+
+// 3) Vencidas (si existe promisedAt; usa '!=' o IN según tus reglas)
+async function loadOverdue(root){
+  try{
+    const now = Date.now();
+    // Si promisedAt es NUMBER, cambia fromMillis(now) → now
+    const q = fx.query(
+      fx.collection(db, C.ORDERS),
+      fx.where('status','!=','done'),
+      fx.where('promisedAt','<', fx.Timestamp.fromMillis(now)),
+      fx.limit(10)
+    );
+    const snap = await fx.getDocs(q);
+    if(snap.empty){ root.querySelector('#overduePanel').style.display='none'; return; }
+
+    const ul = root.querySelector('#overdueList');
+    const items = [];
+    snap.forEach(s=>{
+      const d = s.data();
+      const when = new Date(toMillis(d?.promisedAt)).toLocaleString();
+      items.push(`<li class="row">
+        <div><strong>${escapeHtml(d?.title || s.id)}</strong>
+        <div class="muted">Compromiso: ${when}</div></div>
+        <span class="badge" title="Estatus">${d?.status || '—'}</span></li>`);
+    });
+    ul.innerHTML = items.join('');
+    root.querySelector('#overduePanel').style.display='';
+  }catch(err){
+    // Si tus reglas no permiten '!=', cámbialo por IN ['new','in_progress']
+    console.warn('[DASH] loadOverdue warning:', err?.code || err?.message);
+    root.querySelector('#overduePanel').style.display='none';
+  }
+}
+
+/* ---------- util UI ---------- */
+function badgeStatus(status){
+  const map={
+    done:'<span class="badge">Hecha</span>',
+    new:'<span class="badge" style="background:#fff3cd;color:#975a06;">Nueva</span>',
+    in_progress:'<span class="badge" style="background:#e7f5ff;color:#0b5ed7;">En progreso</span>'
+  };
+  return map[status] || '<span class="badge" style="background:#eee;color:#333;">—</span>';
+}
+function escapeHtml(str=''){ return str.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }

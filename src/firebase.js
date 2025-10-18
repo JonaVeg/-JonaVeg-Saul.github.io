@@ -12,7 +12,8 @@ import {
 // Firestore
 import {
   getFirestore, collection, doc, addDoc, getDoc, getDocs, updateDoc, setDoc,
-  serverTimestamp, query, where, orderBy, limit, writeBatch, deleteDoc, Timestamp
+  serverTimestamp, query, where, orderBy, limit, writeBatch, deleteDoc, Timestamp,
+  getCountFromServer
 } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js';
 
 // Realtime Database (RTDB)
@@ -44,7 +45,7 @@ export const fx = {
   // firestore
   collection, doc, addDoc, getDoc, getDocs, updateDoc, setDoc,
   serverTimestamp, query, where, orderBy, limit,
-  writeBatch, deleteDoc, Timestamp,
+  writeBatch, deleteDoc, Timestamp, getCountFromServer,
   // auth
   onAuthStateChanged, signInWithEmailAndPassword, signOut, sendEmailVerification
 };

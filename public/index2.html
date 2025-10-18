@@ -6,6 +6,8 @@
   <meta name="theme-color" content="#0d6efd" />
   <title>EVRepairs — Gestión</title>
   <link href="./assets/styles.css" rel="stylesheet" />
+  <link rel="icon" href="./assets/favicon.ico">
+
 </head>
 <body>
   <!-- Accesibilidad: ir al contenido -->
@@ -14,7 +16,7 @@
   <header class="topbar topbar--sticky">
     <div class="topbar__inner container">
       <a href="#/dashboard" class="brand">
-        <img src="assets/logocompl.PNG" alt="EVRepairs" class="logo" />
+        <img src="./assets/logocompl.PNG" alt="EVRepairs" class="logo" />
         <span class="brand__name">EVRepairs</span>
       </a>
 
@@ -41,7 +43,7 @@
   <!-- App -->
   <script type="module" src="/src/main.js"></script>
 
-  <!-- Navegación mejorada (activa, móvil, accesibilidad) -->
+  <!-- Navegación (activo, móvil, accesibilidad) -->
   <script>
     const navBtn  = document.getElementById('navToggle');
     const nav     = document.getElementById('mainnav');
@@ -56,36 +58,21 @@
       });
     }
 
-    // Toggle menú móvil
     if (navBtn && nav) {
       navBtn.addEventListener('click', () => {
         const open = nav.classList.toggle('open');
         navBtn.classList.toggle('open', open);
         navBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
       });
-
-      // Cierra el menú al navegar
       nav.addEventListener('click', (e) => {
-        const a = e.target.closest('a');
-        if (!a) return;
-        nav.classList.remove('open');
-        navBtn.classList.remove('open');
+        const a = e.target.closest('a'); if (!a) return;
+        nav.classList.remove('open'); navBtn.classList.remove('open');
         navBtn.setAttribute('aria-expanded', 'false');
       });
     }
-    // dentro de onAuthStateChanged(auth, user => { ... })
-if (user && !user.emailVerified) {
-  // Mantén al usuario en /login hasta que verifique su correo
-  if (!location.hash.startsWith('#/login')) {
-    location.hash = '#/login';
-  }
-  return;
-}
-
 
     window.addEventListener('hashchange', setActiveByHash);
     setActiveByHash();
   </script>
 </body>
 </html>
-
