@@ -16,8 +16,7 @@
   <header class="topbar topbar--sticky">
     <div class="topbar__inner container">
       <a href="#/dashboard" class="brand">
-        <img src="./assets/logocompl.PNG" alt="EVRepairs" class="logo" />
-        <span class="brand__name">EVRepairs</span>
+        <span class="brand__name">EVRepairs Gestión</span>
       </a>
 
       <!-- Toggle menú móvil -->
@@ -51,7 +50,7 @@
 
     function setActiveByHash() {
       const hash = location.hash || '#/dashboard';
-      links.forEach(a => {
+      links.forEach(a => { 
         const on = hash.startsWith(a.getAttribute('data-route'));
         a.classList.toggle('is-active', on);
         a.setAttribute('aria-current', on ? 'page' : 'false');

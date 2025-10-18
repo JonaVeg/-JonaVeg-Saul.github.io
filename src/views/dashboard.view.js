@@ -26,17 +26,63 @@ function createdAtFilter(days){
   return [ fx.where('createdAt','>=', cutoff) ];
 }
 
+/* ---------- Mapeo EXACTO de tus estatus en BD (para consultas) ---------- */
+const STATUS_DB = {
+  NUEVA:    ['Abierta'],
+  PROGRESO: ['En revisión', 'En proceso'],
+  HECHA:    ['Finalizada', 'Entregada']
+};
+
+/* ---------- Mapeo normalizado (solo para UI/badges) ---------- */
+const STATUS_GROUPS = {
+  NUEVA:    ['abierta','abierto'],
+  PROGRESO: ['en revision','en revisión','en proceso','en progreso'],
+  HECHA:    ['finalizada','finalizado','entregada','entregado','cerrada','cerrado']
+};
+function norm(str=''){
+  return String(str).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+function groupOf(status=''){
+  const s = norm(status);
+  if (STATUS_GROUPS.NUEVA.some(v => norm(v) === s))    return 'NUEVA';
+  if (STATUS_GROUPS.PROGRESO.some(v => norm(v) === s)) return 'PROGRESO';
+  if (STATUS_GROUPS.HECHA.some(v => norm(v) === s))    return 'HECHA';
+  return 'OTRO';
+}
+
+/** Suma conteos con literales EXACTOS en BD (usa == o in). */
+async function countForStatuses(colRef, statuses, dateFilter = []) {
+  if (!statuses || statuses.length === 0) return 0;
+
+  // Un solo valor → ==
+  if (statuses.length === 1) {
+    const snap = await fx.getCountFromServer(
+      fx.query(colRef, fx.where('status','==', statuses[0]), ...dateFilter)
+    );
+    return snap.data().count || 0;
+  }
+
+  // Varios valores → IN (máx 10)
+  const snap = await fx.getCountFromServer(
+    fx.query(colRef, fx.where('status','in', statuses), ...dateFilter)
+  );
+  return snap.data().count || 0;
+}
+
 export default function DashboardView(){
   const $el = document.createElement('section');
   $el.className = 'dash';
 
   $el.innerHTML = `
+    <style>
+      .dash-hero{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;}
+      .dash-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;}
+      @media(max-width:960px){.dash-grid{grid-template-columns:1fr;}}
+    </style>
+
     <div class="dash-hero">
-      <div class="hero-left">
-        <h1>EVRepairs <span class="dot blue"></span></h1>
-        <span class="tip muted">Panel principal</span>
-      </div>
-      <div class="dash-actions"><button id="btnRefresh" class="cta">Actualizar</button></div>
+      <h1>Panel Principal</h1>
+      <button id="btnRefresh" class="cta">Actualizar</button>
     </div>
 
     <!-- KPIs -->
@@ -107,8 +153,8 @@ export default function DashboardView(){
     </section>
 
     <!-- Resultados -->
-    <section class="dash-results">
-      <!-- Actividad -->
+    <section class="dash-grid">
+      <!-- Actividad Reciente -->
       <article class="card result-card">
         <div class="result-head">
           <div>
@@ -121,7 +167,7 @@ export default function DashboardView(){
         <div class="table-wrap">
           <table class="mini-table">
             <thead>
-              <tr><th>ID</th><th>Título</th><th>Estatus</th><th>Fecha</th></tr>
+              <tr><th>Folio</th><th>Cliente</th><th>Estatus</th><th>Fecha</th></tr>
             </thead>
             <tbody id="tbodyActivity">
               <tr><td colspan="4" class="muted">Cargando…</td></tr>
@@ -130,7 +176,7 @@ export default function DashboardView(){
         </div>
       </article>
 
-      <!-- Notificaciones -->
+      <!-- Notificaciones (si las usas) -->
       <article class="card result-card">
         <div class="result-head">
           <div>
@@ -176,40 +222,43 @@ async function refreshAll(root){
   ]);
 }
 
+/* KPIs usando TUS etiquetas exactas en BD */
 async function loadKPIs(root,user){
   try{
     const ordersCol = fx.collection(db, C.ORDERS);
     const dateFilter = createdAtFilter(KPI_DAYS); // [] si USE_DATE_FILTERS=false
 
     // Total (con o sin fecha)
-    const qTotal = fx.query(ordersCol, ...dateFilter);
+    const totalSnap = await fx.getCountFromServer(fx.query(ordersCol, ...dateFilter));
+    const total = totalSnap.data().count || 0;
 
-    // Para evitar índices: si APPLY_DATE_ON_STATUS es false, NO agregamos filtro de fecha
-    const qDone = fx.query(
+    // Completadas = Finalizada + Entregada
+    const done = await countForStatuses(
       ordersCol,
-      fx.where('status','==','done'),
-      ...(APPLY_DATE_ON_STATUS ? dateFilter : [])
+      STATUS_DB.HECHA,
+      APPLY_DATE_ON_STATUS ? dateFilter : []
     );
 
-    const qPending = fx.query(
+    // Pendientes = Abierta + (En revisión/En proceso)
+    const pending = await countForStatuses(
       ordersCol,
-      fx.where('status','in',['new','in_progress']),
-      ...(APPLY_DATE_ON_STATUS ? dateFilter : [])
+      [...STATUS_DB.NUEVA, ...STATUS_DB.PROGRESO],
+      APPLY_DATE_ON_STATUS ? dateFilter : []
     );
 
-    const [cTotal,cDone,cPending] = await Promise.all([
-      fx.getCountFromServer(qTotal),
-      fx.getCountFromServer(qDone),
-      fx.getCountFromServer(qPending),
-    ]);
-
-    const total=cTotal.data().count||0, done=cDone.data().count||0, pending=cPending.data().count||0;
-    root.querySelector('#kpiTotal').textContent = total;
-    root.querySelector('#kpiDone').textContent = done;
+    root.querySelector('#kpiTotal').textContent   = total;
+    root.querySelector('#kpiDone').textContent    = done;
     root.querySelector('#kpiPending').textContent = pending;
-    root.querySelector('#kpiTotalSub').textContent = USE_DATE_FILTERS?`Últimos ${KPI_DAYS} días`:'Total histórico';
-    root.querySelector('#kpiDoneSub').textContent = total?`Tasa: ${Math.round((done/Math.max(total,1))*100)}%`:'Sin datos';
-    root.querySelector('#kpiPendingSub').textContent = pending?'Atención requerida':'Todo al día';
+
+    root.querySelector('#kpiTotalSub').textContent = USE_DATE_FILTERS
+      ? `Últimos ${KPI_DAYS} días`
+      : 'Total histórico';
+
+    root.querySelector('#kpiDoneSub').textContent =
+      total ? `Tasa: ${Math.round((done/Math.max(total,1))*100)}%` : 'Sin datos';
+
+    root.querySelector('#kpiPendingSub').textContent =
+      pending ? 'Atención requerida' : 'Todo al día';
 
     // Mensajes no leídos
     const qUnread = fx.query(
@@ -247,7 +296,12 @@ async function loadActivity(root){
     }
     const rows=[]; snap.forEach(d=>{
       const data=d.data(); const ms=toMillis(data?.createdAt);
-      rows.push(`<tr class="row-click" title="Abrir"><td>${d.id}</td><td>${escapeHtml(data?.title||'Orden')}</td><td>${badgeStatus(data?.status)}</td><td>${new Date(ms).toLocaleString()}</td></tr>`);
+      rows.push(`<tr class="row-click" title="Abrir orden" data-id="${d.id}">
+        <td>${escapeHtml(data?.folio||d.id.slice(0,6))}</td>
+        <td>${escapeHtml(data?.clientNameSnapshot||'N/A')}</td>
+        <td>${badgeStatus(data?.status)}</td>
+        <td>${new Date(ms).toLocaleDateString()}</td>
+      </tr>`);
     });
     tbody.innerHTML = rows.join('');
   }catch(err){
@@ -255,6 +309,11 @@ async function loadActivity(root){
     const msg = isIndexError(err)? indexHelpMessage()
               : (err?.code==='permission-denied'? permHelpMessage() : 'Error al cargar actividad.');
     tbody.innerHTML = `<tr><td colspan="4" class="muted">${msg}</td></tr>`;
+  } finally {
+    // Evento para abrir detalle de orden
+    tbody.querySelectorAll('tr[data-id]').forEach(row => {
+      row.addEventListener('click', () => window.renderOrderDetail(row.dataset.id));
+    });
   }
 }
 
@@ -294,18 +353,19 @@ async function loadNotifs(root,user){
 
 /* ====== NUEVOS BLOQUES ====== */
 
-// 1) Resumen por estatus (histórico)
+// 1) Resumen por estatus (histórico) usando valores exactos
 async function loadStatusSummary(root){
   try{
     const col = fx.collection(db, C.ORDERS);
-    const [cNew, cWip, cDone] = await Promise.all([
-      fx.getCountFromServer(fx.query(col, fx.where('status','==','new'))),
-      fx.getCountFromServer(fx.query(col, fx.where('status','==','in_progress'))),
-      fx.getCountFromServer(fx.query(col, fx.where('status','==','done')))
+    const [countNew, countWip, countDone] = await Promise.all([
+      countForStatuses(col, STATUS_DB.NUEVA),
+      countForStatuses(col, STATUS_DB.PROGRESO),
+      countForStatuses(col, STATUS_DB.HECHA)
     ]);
-    root.querySelector('#stNew').textContent  = cNew.data().count || 0;
-    root.querySelector('#stWip').textContent  = cWip.data().count || 0;
-    root.querySelector('#stDone').textContent = cDone.data().count || 0;
+
+    root.querySelector('#stNew').textContent  = countNew || 0;
+    root.querySelector('#stWip').textContent  = countWip || 0;
+    root.querySelector('#stDone').textContent = countDone || 0;
   }catch(err){
     console.error('[DASH] loadStatusSummary error:', err);
     ['#stNew','#stWip','#stDone'].forEach(sel=>{
@@ -329,7 +389,7 @@ async function loadTrend14d(root){
     );
     const snap = await fx.getDocs(q);
 
-    // Agregar por día
+    // Agregación por día
     const byDay = new Map();
     for(let i=0;i<days;i++){
       const d = new Date(sinceMs + i*86400000);
@@ -392,7 +452,7 @@ async function loadOverdue(root){
     // Si promisedAt es NUMBER, cambia fromMillis(now) → now
     const q = fx.query(
       fx.collection(db, C.ORDERS),
-      fx.where('status','!=','done'),
+      fx.where('status','!=','Finalizada'), // si tus reglas no permiten '!=', usa IN con pendientes
       fx.where('promisedAt','<', fx.Timestamp.fromMillis(now)),
       fx.limit(10)
     );
@@ -403,16 +463,22 @@ async function loadOverdue(root){
     const items = [];
     snap.forEach(s=>{
       const d = s.data();
-      const when = new Date(toMillis(d?.promisedAt)).toLocaleString();
+      const when = new Date(toMillis(d?.promisedAt)).toLocaleDateString();
       items.push(`<li class="row">
         <div><strong>${escapeHtml(d?.title || s.id)}</strong>
         <div class="muted">Compromiso: ${when}</div></div>
-        <span class="badge" title="Estatus">${d?.status || '—'}</span></li>`);
+        <span class="badge" title="Estatus">${escapeHtml(d?.status || '—')}</span></li>`);
     });
     ul.innerHTML = items.join('');
     root.querySelector('#overduePanel').style.display='';
   }catch(err){
-    // Si tus reglas no permiten '!=', cámbialo por IN ['new','in_progress']
+    // Alternativa si '!=' falla por reglas:
+    // const q = fx.query(
+    //   fx.collection(db, C.ORDERS),
+    //   fx.where('status','in',['Abierta','En revisión','En proceso']),
+    //   fx.where('promisedAt','<', fx.Timestamp.fromMillis(now)),
+    //   fx.limit(10)
+    // );
     console.warn('[DASH] loadOverdue warning:', err?.code || err?.message);
     root.querySelector('#overduePanel').style.display='none';
   }
@@ -420,11 +486,13 @@ async function loadOverdue(root){
 
 /* ---------- util UI ---------- */
 function badgeStatus(status){
-  const map={
-    done:'<span class="badge">Hecha</span>',
-    new:'<span class="badge" style="background:#fff3cd;color:#975a06;">Nueva</span>',
-    in_progress:'<span class="badge" style="background:#e7f5ff;color:#0b5ed7;">En progreso</span>'
+  const g = groupOf(status);
+  const MAP_HTML = {
+    NUEVA:    '<span class="badge" style="background:#fff3cd;color:#975a06;">Abierta</span>',
+    PROGRESO: '<span class="badge" style="background:#e7f5ff;color:#0b5ed7;">En progreso</span>',
+    HECHA:    '<span class="badge">Completada</span>',
+    OTRO:     '<span class="badge" style="background:#eee;color:#333;">—</span>'
   };
-  return map[status] || '<span class="badge" style="background:#eee;color:#333;">—</span>';
+  return MAP_HTML[g] || MAP_HTML.OTRO;
 }
 function escapeHtml(str=''){ return str.replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }

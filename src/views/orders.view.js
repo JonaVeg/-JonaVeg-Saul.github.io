@@ -21,8 +21,8 @@ export default function OrdersView() {
   el.innerHTML = `
     <h1>Órdenes</h1>
 
-    <div class="card" style="margin:.5rem 0;">
-      <form id="filters" class="grid" style="grid-template-columns: repeat(6, minmax(0,1fr)); gap:.5rem;">
+    <div class="card" style="margin:.5rem 0; padding-bottom: 0.5rem;">
+      <form id="filters">
         <label>Estatus
           <select name="status">
             <option value="">Todos</option>
@@ -38,7 +38,7 @@ export default function OrdersView() {
         <label style="grid-column: span 2;">Buscar (folio / cliente / equipo)
           <input name="q" placeholder="Texto libre" />
         </label>
-        <div style="display:flex;align-items:flex-end;gap:.5rem;">
+        <div style="display:flex;align-items:flex-end;gap:.5rem; flex-wrap: wrap;">
           <button id="btnApply" type="submit">Aplicar</button>
           <button id="btnClear" type="button" class="muted">Limpiar</button>
           <button id="btnCsv" type="button" class="cta">Exportar CSV</button>
@@ -47,24 +47,26 @@ export default function OrdersView() {
       <div id="msg" class="muted"></div>
     </div>
 
-    <table class="clients-table">
-      <thead>
-        <tr>
-          <th>Folio</th>
-          <th>Estatus</th>
-          <th>Cliente</th>
-          <th>Equipo</th>
-          <th>Fecha</th>
-          <th style="width:220px;">Acciones</th>
-        </tr>
-      </thead>
-      <tbody id="tbody">
-        <tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="clients-table">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Estatus</th>
+            <th>Cliente</th>
+            <th>Equipo</th>
+            <th>Fecha</th>
+            <th style="width:220px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="6" style="text-align:center;">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
 
-    <div id="pager" class="card" style="display:flex;align-items:center;justify-content:space-between;margin-top:.5rem;gap:.75rem;">
-      <div style="display:flex;align-items:center;gap:.5rem;">
+    <div id="pager" class="card" style="display:flex;align-items:center;justify-content:space-between;margin-top:.5rem;gap:.75rem;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
         <button id="btnFirst" type="button">« Primera</button>
         <button id="btnPrev"  type="button">‹ Anterior</button>
         <button id="btnNext"  type="button">Siguiente ›</button>
@@ -72,7 +74,7 @@ export default function OrdersView() {
       </div>
       <div id="pageInfo" class="muted"></div>
       <div>
-        <label style="display:flex;align-items:center;gap:.4rem;">
+        <label style="display:flex;align-items:center;gap:.4rem;justify-content:flex-end;">
           <span>Filas por página</span>
           <select id="pageSizeSel">
             ${PAGE_SIZE_OPTIONS.map(n => `<option value="${n}" ${n===20?'selected':''}>${n}</option>`).join('')}

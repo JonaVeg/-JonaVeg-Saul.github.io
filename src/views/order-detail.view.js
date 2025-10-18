@@ -24,8 +24,14 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     <a href="#/orders">← Volver a órdenes</a>
     <h2>${isNew ? 'Nueva OST' : 'Editar OST'}</h2>
 
+    <style>
+      .order-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:.6rem}
+      .quote-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.6rem}
+      .item-row{display:grid;grid-template-columns:2fr 1fr .7fr .7fr .5fr auto;gap:.4rem;margin-bottom:.4rem}
+      @media(max-width:720px){.item-row{grid-template-columns:1fr;gap:.5rem;border:1px solid #eee;padding:.5rem;border-radius:8px;}}
+    </style>
     <form id="form" class="card">
-      <div class="grid" style="grid-template-columns: repeat(3,minmax(0,1fr)); gap:.6rem;">
+      <div class="order-grid">
         <label>Folio <input name="folio" required value="${genFolio()}"/></label>
         <label>Fecha <input type="date" name="date" required /></label>
         <label>Estatus
@@ -86,7 +92,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
 
       <fieldset>
         <legend>Cotizador</legend>
-        <div class="grid">
+        <div class="quote-grid">
           <label>Tipo de cambio USD→MXN
             <input type="number" step="0.0001" name="usdToMxn" value="18.20" />
           </label>
@@ -107,7 +113,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
         <button type="button" data-add="labor">+ Mano de Obra</button>
         <div data-list="labor"></div>
 
-        <div id="totals" class="card muted" style="margin-top:.5rem"></div>
+        <div id="totals" class="card" style="margin-top:.5rem;background:#f8f9fa;"></div>
       </fieldset>
 
       <div id="msg" class="muted"></div>
@@ -350,16 +356,16 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
   //  Cotizador
   // =========================
   const addRow = (type) => {
-    const wrap = el.querySelector(`[data-list="${type}"]`);
+    const wrap = el.querySelector(`[data-list="${type}"]`); // Contenedor
     const row = document.createElement('div');
-    row.className = 'row';
+    row.className = 'item-row'; // Usamos una clase específica para los ítems
     if (type === 'labor') {
       row.innerHTML = `
         <input placeholder="Desc" data-f="description" />
         <input type="number" step="0.25" placeholder="Horas" data-f="hours" />
         <input type="number" step="0.01" placeholder="Tarifa" data-f="ratePerHour" />
         <select data-f="currency"><option>MXN</option><option>USD</option></select>
-        <button type="button" data-remove>×</button>`;
+        <button type="button" data-remove class="mini danger">×</button>`;
     } else {
       row.innerHTML = `
         <input placeholder="Desc" data-f="description" />
@@ -367,7 +373,7 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
         <input type="number" step="1" placeholder="Cant." data-f="qty" />
         <input type="number" step="0.01" placeholder="P. Unit" data-f="unitPrice" />
         <select data-f="currency"><option>MXN</option><option>USD</option></select>
-        <button type="button" data-remove>×</button>`;
+        <button type="button" data-remove class="mini danger">×</button>`;
     }
     row.querySelector('[data-remove]').onclick = () => { row.remove(); computeTotals(); };
     wrap.appendChild(row);
@@ -429,23 +435,23 @@ export function renderOrderDetail(orderId = null, clientId = null, equipmentId =
     const totals = calcTotals(items, usdToMxn, discountRate);
 
     totalsBox.innerHTML = `
-      <div class="quote-summary">
-        <div class="quote-card">
-          <div class="quote-hdr">MXN</div>
+      <div class="totals-grid">
+        <div class="col">
+          <div class="t-title">MXN</div>
           <div class="qrow"><span>Subtotal</span><span>${money(totals.mx.subtotal,'MXN')}</span></div>
-          <div class="qrow"><span>Descuento (${(discountRate*100).toFixed(2)}%)</span><span class="qneg">-${money(totals.mx.discount,'MXN')}</span></div>
-          <div class="qsep"></div>
-          <div class="qrow qtotal"><span><strong>Total MXN</strong></span><span><strong>${money(totals.mx.total,'MXN')}</strong></span></div>
+          <div class="qrow"><span>Descuento (${(discountRate*100).toFixed(2)}%)</span><span class="neg">-${money(totals.mx.discount,'MXN')}</span></div>
+          <hr style="opacity:.1;margin:.2rem 0">
+          <div class="qrow t-strong"><span><strong>Total MXN</strong></span><span><strong>${money(totals.mx.total,'MXN')}</strong></span></div>
         </div>
-        <div class="quote-card">
-          <div class="quote-hdr">USD</div>
+        <div class="col">
+          <div class="t-title">USD</div>
           <div class="qrow"><span>Subtotal</span><span>${money(totals.us.subtotal,'USD')}</span></div>
-          <div class="qrow"><span>Discount (${(discountRate*100).toFixed(2)}%)</span><span class="qneg">-${money(totals.us.discount,'USD')}</span></div>
-          <div class="qsep"></div>
-          <div class="qrow qtotal"><span><strong>Total USD</strong></span><span><strong>${money(totals.us.total,'USD')}</strong></span></div>
+          <div class="qrow"><span>Discount (${(discountRate*100).toFixed(2)}%)</span><span class="neg">-${money(totals.us.discount,'USD')}</span></div>
+          <hr style="opacity:.1;margin:.2rem 0">
+          <div class="qrow t-strong"><span><strong>Total USD</strong></span><span><strong>${money(totals.us.total,'USD')}</strong></span></div>
         </div>
       </div>
-      <div class="qmeta">TC: 1 USD = ${usdToMxn.toFixed(4)} MXN</div>
+      <div class="t-note">Tipo de cambio: 1 USD = ${usdToMxn.toFixed(4)} MXN</div>
     `;
     return { items, totals, usdToMxn, discountRate };
   }
@@ -687,25 +693,6 @@ form.addEventListener('submit', async (e) => {
   });
 }
 
-// —— Estilos para el resumen de cotización (se inyectan una sola vez)
-function ensureQuoteStyles() {
-  if (document.getElementById('quote-summary-styles')) return;
-  const css = `
-  .quote-summary{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
-  .quote-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:.85rem}
-  .quote-hdr{font-weight:600;margin-bottom:.35rem;color:#6b7280;letter-spacing:.02em}
-  .qrow{display:flex;justify-content:space-between;gap:.75rem;padding:.25rem 0}
-  .qrow span{color:#374151}
-  .qsep{height:1px;background:#eee;margin:.35rem 0}
-  .qtotal strong{font-size:1.05rem}
-  .qneg{color:#b91c1c}
-  .qmeta{font-size:.85rem;color:#6b7280;margin-top:.25rem}
-  `;
-  const style = document.createElement('style');
-  style.id = 'quote-summary-styles';
-  style.textContent = css;
-  document.head.appendChild(style);
-}
 function ensurePreviewStyles() {
   if (document.getElementById('thumb-styles')) return;
   const s = document.createElement('style');
